@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <string.h>
 
 #ifndef DEBUG
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
@@ -37,6 +38,10 @@ Queue* initQueue(Queue* queue){
         return queue;
     }
     queue = (Queue*) malloc(sizeof(Queue));                                 // Malloc the new queue. Set all the initial node stuff to NULL/Empty/0.
+    if (queue == NULL){
+        perror("Malloc Failed in Queue Initialization");
+        return NULL;
+    }
     queue->head = NULL;
     queue->tail = NULL;
     queue->stopQueue = false;
@@ -166,4 +171,90 @@ void printQueue( Queue* queue ){
 
 /* End of Queue Code */
 
-// Put non-Queue Stuff Below This
+
+/** Put non-Queue Stuff Below This **/
+
+// Directory and File Reading Methods
+// Checks if input string is a directory
+int isDir(char *pathname) {
+	struct stat data;
+	
+	if (stat(pathname, &data)) {    // checks for error
+		return false;
+	}
+	
+	if (S_ISDIR(data.st_mode)) {
+		return true;
+	}
+	return false;
+}
+
+// Checks if input string is a file
+int isRegFile(char *pathname) {
+	struct stat data;
+	
+	if (stat(pathname, &data)) {    // checks for error
+		return false;
+	}
+	
+	if (S_ISREG(data.st_mode)) {
+		return true;
+	}
+	return false;
+}
+
+// check if a string has ONLY positive numbers -- checks for "12abcd" and "1abcd2" cases
+int isLegalAtoiInput(char* arr){
+    for (char* ptr = arr; *ptr; ++ptr)
+        if(!(*ptr <= 57 && *ptr >= 48)) // character is not btwn '0' and '9'
+            return false;
+    return true;
+}
+
+// Checks if input string is an optional parameter
+int setOptionalParameter(char* string, int* numOfDirThreadsPtr, int* numOfFileThreadsPtr, int* numOfAnalysisThreadsPtr, char** fileNameSuffixPtr){
+    int stringLength = strlen(string);
+    if(stringLength < 3){
+        if (stringLength >= 2 && string[1] == 's'){         // This means suffix is an empty string
+            *fileNameSuffixPtr = realloc(*fileNameSuffixPtr,1);
+            strncpy(*fileNameSuffixPtr, "", 1);
+            return true;
+        }
+        fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
+        return false;
+    }
+    if(string[1] == 'd'){                   // set numOfDirThreads
+        int inputNum = atoi(string + 2);
+        if (isLegalAtoiInput(string + 2) == false || inputNum <= 0){                // Checks if the input is a legal input and its not <= 0
+            fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
+            return false;
+        }
+        *numOfDirThreadsPtr = inputNum;
+        return true;
+    }else if(string[1] == 'f'){             // set numOfFileThreads
+
+        int inputNum = atoi(string + 2);
+        if (isLegalAtoiInput(string + 2) == false || inputNum <= 0){                // Checks if the input is a legal input and its not <= 0
+            fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
+            return false;
+        }
+        *numOfFileThreadsPtr = inputNum;
+        return true;
+    }else if(string[1] == 'a'){             // set numOfAnalysisThreads
+        int inputNum = atoi(string + 2);
+        if (isLegalAtoiInput(string + 2) == false || inputNum <= 0){                // Checks if the input is a legal input and its not <= 0
+            fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
+            return false;
+        }
+        *numOfAnalysisThreadsPtr = inputNum;
+        return true;
+    }else if (string[1] == 's'){            // set fileNameSuffix
+        *fileNameSuffixPtr = realloc(*fileNameSuffixPtr, stringLength -1);
+        strncpy(*fileNameSuffixPtr, string+2, stringLength-1);
+        return true;
+    }
+    else{
+        fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
+        return false;
+    }
+}

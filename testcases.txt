@@ -1,4 +1,6 @@
 Constantly update list of testcases so we know what we have already tested and what to test our program against before submitting
 
     1) Blank Input: ./compare
-    2)
+    2) Illegal Optional Input: ./compare someinput -x
+    3) Overwrite Optional Input: ./compare someinput -f10 -d12 -a4 -d5
+    4)
