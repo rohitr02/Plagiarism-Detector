@@ -1,1 +1,4 @@
 Constantly update list of testcases so we know what we have already tested and what to test our program against before submitting
+
+    1) Blank Input: ./compare
+    2)
