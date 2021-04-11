@@ -172,9 +172,7 @@ void printQueue( Queue* queue ){
 /* End of Queue Code */
 
 
-/** Put non-Queue Stuff Below This **/
-
-// Directory and File Reading Methods
+/* Directory and File Reading Methods */
 // Checks if input string is a directory
 int isDir(char *pathname) {
 	struct stat data;
@@ -257,4 +255,20 @@ int setOptionalParameter(char* string, int* numOfDirThreadsPtr, int* numOfFileTh
         fprintf(stderr, "%s %s\n", string, "is an invalid optional argument.");
         return false;
     }
+}
+
+
+/* Structure to hold the arguments passed into the thread */
+typedef struct thread_args{
+    Queue* dirQueue;
+    Queue* fileQueue;
+    int id;
+} thread_args;
+
+
+/* Thread Functions to Call */
+void* readDirectory(void* arguments){
+    thread_args* args = arguments;
+    printf("Hello from thread #%d\n", args->id);
+    return NULL;
 }
