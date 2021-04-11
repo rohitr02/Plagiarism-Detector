@@ -85,11 +85,16 @@ int main(int argc, char* argv[]){
         args[i].dirQueue = dirQueue;
         args[i].fileQueue = fileQueue;
         args[i].id = i;
+        args[i].exitCode = EXIT_SUCCESS;
+        args[i].fileSuffix = fileNameSuffix;
         if(pthread_create(&dirThreadIDs[i], NULL, readDirectory, &args[i]) != 0){
             perror("pthread_create failure");
             // not sure how to handle killing all of the threads here
         }
     }
+
+    sleep(5);
+    stopQueue(dirQueue);
 
     // Join all of the threads here
     for(int i = 0; i < numOfDirThreads; i++){
@@ -99,7 +104,6 @@ int main(int argc, char* argv[]){
         }
     }
 
-    stopQueue(dirQueue);
 
     // Clean Up -- Free everything
     fileQueue = destroyQueue(fileQueue);
