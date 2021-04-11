@@ -79,7 +79,13 @@ int main(int argc, char* argv[]){
         perror("Malloc Failure");
         return EXIT_FAILURE;
     }
-    
+
+    // Used to keep track of when to stop/close the directory queue
+    atomic_uint dirThreadCompleteCounter = 0;
+    pthread_mutex_t counterLock;
+    pthread_mutex_init(&counterLock, NULL);
+    pthread_cond_init(&closeDirQueue, NULL);
+
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfDirThreads; i++){
         args[i].dirQueue = dirQueue;
@@ -93,7 +99,15 @@ int main(int argc, char* argv[]){
         }
     }
 
-    sleep(5);
+    // Wait till the number of directory threads completed reaches the number of total directory threads. Then call stopQueue()
+    pthread_mutex_lock(&counterLock);
+    while(dirThreadCompleteCounter < numOfDirThreads){
+        pthread_cond_wait(&closeDirQueue, &counterLock);
+        dirThreadCompleteCounter++;
+    }
+    pthread_mutex_unlock(&counterLock);
+    pthread_mutex_destroy(&counterLock);
+    pthread_cond_destroy(&closeDirQueue);
     stopQueue(dirQueue);
 
     // Join all of the threads here

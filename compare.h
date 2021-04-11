@@ -9,10 +9,13 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #ifndef DEBUG
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
+
+pthread_cond_t closeDirQueue;
 
 /* Queue Code */
 typedef struct node {
@@ -179,6 +182,19 @@ void printQueue(Queue* queue) {
     printf("Queue is empty\n");
     pthread_mutex_unlock(&queue->lock);                                 // Unlock the lock
 }
+
+int getSize(Queue* queue){
+    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
+        if (DEBUG == true)
+            fprintf(stderr, "%s\n", "Stop Queue Failed: The queue is not initialized");
+        return -1;
+    }
+    int len = 0;
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutuex
+    len = queue->size;
+    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
+    return len;
+}
 /* End of Queue Code */
 
 
@@ -340,6 +356,13 @@ void* readDirectory(void* arguments) {
         }
         free(directory);
         closedir(folder);    // close directory
+
+        // Check if the dirQueue is empty, if it is, then signal the main thread to increment the dirThreadCompleteCounter.
+        // Possible Issues: If a thread is complete and it dirThreadCompleteCounter gets incremented, but then another background thread enqueues something, then the next time this thread gets called, it will not go to sleep. 
+        // On the next iteration this thread will once again be marked complete. So I think it is possible for one thread to repeatedly be marked complete even if it doesn't go to sleep on the next iteration.
+        if(getSize(args->dirQueue) == 0){
+            pthread_cond_signal(&closeDirQueue);
+        }
     }
     return NULL;
 }
