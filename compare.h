@@ -198,7 +198,7 @@ int getSize(Queue* queue){
 /* End of Queue Code */
 
 
-/* Directory and File Reading Methods */
+/* Directory Reading and File Queue Writing Methods */
 
 // Checks if input string is a directory
 int isDir(char* pathname) {
@@ -365,4 +365,143 @@ void* readDirectory(void* arguments) {
         }
     }
     return NULL;
+}
+
+
+/** File and WSD Code */
+typedef struct word {
+    char* letters;      // holds the string
+    size_t count;       // number of times this word has been seen
+    double freq;        // freq of this word
+} word;
+
+typedef struct wfd_node{
+    char* fileName;
+    word* wordArray;            // array holding all the words in the file
+    size_t totalNumOfWords;
+    size_t insertIndex;         // insert index into the array
+    size_t size;
+} wfd_node;
+
+// init a wfd_node -- letters MUST BE MALLOC'd -- DO NOT free letters after calling this method
+word* init_word(word* w, char* letters){
+    if(w != NULL){          // if the word is already initialized then return immediately
+        fprintf(stderr, "%s", "This wfd_node has already been initialized!");
+        return w;
+    }
+    w = malloc(sizeof(word));       // malloc space
+    if (w == NULL) {                                                  // If malloc fails then call perror and exit failure
+        perror("Malloc Failed in init_word for Word");
+        return EXIT_FAILURE;
+    }
+    w->letters = letters;
+    w->count = 1;
+    w->freq = 0;
+    return w;
+}
+
+// Free the word's letters
+int destroy_word(word w){
+    free(w.letters);
+    return EXIT_SUCCESS;
+}
+
+// init a wfd_node -- fileName MUST BE MALLOC'd -- DO NOT free filename after calling this method
+wfd_node* init_wfd_node(wfd_node* ptr, char* fileName){
+    if(ptr!=NULL){       // Already initialized
+        if(DEBUG == true){
+            fprintf(stderr, "%s", "This wfd_node has already been initialized!");
+        }
+        return ptr;
+    }
+    int minSize = 1;
+    ptr = malloc(sizeof(wfd_node));
+    if (ptr == NULL) {                                                  // If malloc fails then call perror and exit failure
+        perror("Malloc Failed in init_wfd_node for the wfd_node address");
+        return EXIT_FAILURE;
+    }
+    ptr->fileName = fileName;
+    ptr->wordArray = malloc(minSize*sizeof(word));
+    if (ptr->wordArray == NULL) {                                       // If malloc fails then call perror and exit failure
+        perror("Malloc Failed in init_wfd_node for wordArray");
+        return EXIT_FAILURE;
+    }
+    ptr->totalNumOfWords = 0;
+    ptr->insertIndex = 0;
+    ptr->size = minSize;
+    return ptr;
+}
+
+// resize the wfd_node wordArray
+int resize_wordArray(wfd_node* wfdnode){
+    if(wfdnode == NULL){
+        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
+        return EXIT_FAILURE;
+    }
+    wfdnode->wordArray = realloc(wfdnode->wordArray, wfdnode->size * sizeof(word));
+    if (wfdnode->wordArray == NULL) {                                   // If realloc fails then call perror and exit failure
+        perror("Realloc Failed in resize_wfdArray for Node");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
+// add a word to the wfd_node -- DO NOT free the word* after calling this because it is handled by the destroy_wfd_node method
+int wfd_add(wfd_node* wfdnode, word* w){
+    if(wfdnode == NULL){
+        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
+        return EXIT_FAILURE;
+    }
+    if(wfdnode->insertIndex >= wfdnode->size){
+        wfdnode->size *= 2;
+        if (resize_wordArray(wfdnode) == EXIT_FAILURE)
+            return EXIT_FAILURE;
+    }
+    
+    wfdnode->wordArray[wfdnode->insertIndex++] = *w;                // increment the index and add the word to the word array
+    free(w);
+    return EXIT_SUCCESS;
+}
+
+
+// If you newly malloc'd the 2nd parameter here, then YOU must free it -- if it is the exact same recycled address of an existing element in wfd then DO NOT free it after.
+int wfd_indexOf(wfd_node* wfdnode, char* w){
+    if(wfdnode == NULL){
+        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
+        return -1;
+    }
+    for(int i = 0; i < wfdnode->insertIndex; i++){                  // Loop thru all the words up till insertIndex
+        if(strcmp(wfdnode->wordArray[i].letters, w) == 0){          // if the current word is equal to w, return index
+            return i;
+        }
+    }
+    return -1;                                                      // return -1 if not found
+}
+
+// Destroy's a wfd_node -- free everything
+int destroy_wfd_node(wfd_node* wfdnode){
+    if(wfdnode == NULL){
+        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
+        return EXIT_FAILURE;
+    }
+    for(int i = 0; i < wfdnode->insertIndex; i++){
+        destroy_word(wfdnode->wordArray[i]);
+    }
+    free(wfdnode->wordArray);
+    free(wfdnode->fileName);
+    free(wfdnode);
+    return EXIT_SUCCESS;
+}
+
+// Print all the words in a wfd_node
+void print_wfd_node(wfd_node* wfdnode){
+    if(wfdnode == NULL){
+        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
+        return;
+    }
+    printf("Printing Word Array: ");
+    for(int i = 0; i < wfdnode->insertIndex; i++){
+        printf("%s, ", wfdnode->wordArray[i].letters);
+    }
+    printf("Done\n");
 }
