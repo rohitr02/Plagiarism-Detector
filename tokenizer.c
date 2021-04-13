@@ -14,24 +14,7 @@ struct word {
     struct word* next;
 };
 
-int compareStr(char* str1, char* str2) {
-    int str1size = strlen(str1);
-    int str2size = strlen(str2);
-    int minSize = str1size < str2size ? str1size : str2size;
-
-    for(int i = 0; i < minSize; i++) {
-        if(str1[i] < str2[i]) return 1;
-        if(str2[i] < str1[i]) return 2;
-    }
-
-    if(str1size <= str2size) return 1;
-
-    return 0;
-}
-
-
-
-int tokenize(char* filename) {
+struct word* tokenize(char* filename) {
     int fd;             // keeps tarck of file descriptor
     int byte;           // keeps track of bytes read
     int wordLen;        // keeps tracks of each wordss length when reading through file
@@ -44,7 +27,7 @@ int tokenize(char* filename) {
     int sizeofArray = 100;              // used as the initial size of the array we're gonna store each word into one at a time
     char* buffer = malloc(100 * sizeof(char));
     if(buffer == NULL) {
-        return EXIT_FAILURE;
+        return NULL;
     }
 
 
@@ -57,7 +40,7 @@ int tokenize(char* filename) {
                 if(temp == NULL) {
                     free(buffer);
                     close(fd);
-                    return EXIT_FAILURE;
+                    return NULL;
                 }
                 buffer = temp;
                 sizeofArray *= 2;
@@ -73,7 +56,7 @@ int tokenize(char* filename) {
                 if(newWord == NULL) {
                     free(buffer);
                     close(fd);
-                    return EXIT_FAILURE;
+                    return NULL;
                 }
                 for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
                     newWord[i] = buffer[i];
@@ -101,7 +84,7 @@ int tokenize(char* filename) {
                     wordLen = 0;
                 }
                 if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
-                struct word* insert = malloc(sizeof(struct word));
+                    struct word* insert = malloc(sizeof(struct word));
                     insert->word = newWord;
                     insert->occurence = 1;
                     insert->next = NULL;
@@ -110,7 +93,23 @@ int tokenize(char* filename) {
                     prev = NULL;
                     ptr = head;
                     while(ptr != NULL) {
-                        if(compareStr(newWord, ptr->word) == 1) {  
+                        int str1size = strlen(newWord);
+                        int str2size = strlen(ptr->word);
+                        int minSize = str1size < str2size ? str1size : str2size;
+                        int add = -1;
+
+                        for(int i = 0; i < minSize; i++) {
+                            if(newWord[i] < ptr->word[i]) {
+                                add = 1;
+                                break;
+                            }
+                            if(ptr->word[i] < newWord[i]) {
+                                add = 0;
+                                break;
+                            }
+                        }
+                        if((add == -1) && (str1size <= str2size)) add = 1;
+                        if(add == 1) {  
                             if(prev == NULL) {
                                 insert->next = head;
                                 head = insert;
@@ -136,12 +135,13 @@ int tokenize(char* filename) {
             byte = read(fd, &currChar, 1);
         }
     }
+
     if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
         char* newWord = malloc(wordLen+1 * sizeof(char));
         if(newWord == NULL) {
             free(buffer);
             close(fd);
-            return EXIT_FAILURE;
+            return NULL;
         }
         for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
             newWord[i] = buffer[i];
@@ -160,6 +160,7 @@ int tokenize(char* filename) {
             prev = ptr;
             ptr = ptr->next;
         }
+
         if(prev == NULL) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
             struct word* insert = malloc(sizeof(struct word));
             insert->word = newWord;
@@ -168,6 +169,7 @@ int tokenize(char* filename) {
             head = insert;
             wordLen = 0;
         }
+
        if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
             struct word* insert = malloc(sizeof(struct word));
             insert->word = newWord;
@@ -178,7 +180,23 @@ int tokenize(char* filename) {
             prev = NULL;
             ptr = head;
             while(ptr != NULL) {
-                if(compareStr(newWord, ptr->word) == 1) {  
+                int str1size = strlen(newWord);
+                int str2size = strlen(ptr->word);
+                int minSize = str1size < str2size ? str1size : str2size;
+                int add = -1;
+
+                for(int i = 0; i < minSize; i++) {
+                    if(newWord[i] < ptr->word[i]) {
+                        add = 1;
+                        break;
+                    }
+                    if(ptr->word[i] < newWord[i]) {
+                        add = 0;
+                        break;
+                    }
+                }
+                if((add == -1) && (str1size <= str2size)) add = 1;
+                if(add == 1) {  
                     if(prev == NULL) {
                         insert->next = head;
                         head = insert;
@@ -198,7 +216,6 @@ int tokenize(char* filename) {
                 insert->next = NULL;
             }
             wordLen = 0;
-
         }
     }
 
@@ -214,11 +231,11 @@ int tokenize(char* filename) {
         free(temp);
     }
     
-    return EXIT_SUCCESS;
+    return head;
 }
 
 int main(int argc, char* argv[]) {
     tokenize(argv[1]);
 
-    return EXIT_SUCCESS; 
+    return 0; 
 }
