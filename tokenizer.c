@@ -14,6 +14,21 @@ struct word {
     struct word* next;
 };
 
+int compareStr(char* str1, char* str2) {
+    int str1size = strlen(str1);
+    int str2size = strlen(str2);
+    int minSize = str1size < str2size ? str1size : str2size;
+
+    for(int i = 0; i < minSize; i++) {
+        if(str1[i] < str2[i]) return 1;
+        if(str2[i] < str1[i]) return 2;
+    }
+
+    if(str1size <= str2size) return 1;
+
+    return 0;
+}
+
 
 
 int tokenize(char* filename) {
@@ -86,11 +101,34 @@ int tokenize(char* filename) {
                     wordLen = 0;
                 }
                 if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
-                    struct word* insert = malloc(sizeof(struct word));
+                struct word* insert = malloc(sizeof(struct word));
                     insert->word = newWord;
                     insert->occurence = 1;
                     insert->next = NULL;
-                    prev->next = insert;
+
+          
+                    prev = NULL;
+                    ptr = head;
+                    while(ptr != NULL) {
+                        if(compareStr(newWord, ptr->word) == 1) {  
+                            if(prev == NULL) {
+                                insert->next = head;
+                                head = insert;
+                                break;
+                            }
+                            else {
+                                prev->next = insert;
+                                insert->next = ptr;
+                                break;
+                            }
+                        }
+                        prev = ptr;
+                        ptr = ptr->next;
+                    }
+                    if(ptr == NULL)  {
+                        prev->next = insert;
+                        insert->next = NULL;
+                    }
                     wordLen = 0;
 
                 }
@@ -130,12 +168,35 @@ int tokenize(char* filename) {
             head = insert;
             wordLen = 0;
         }
-        if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
+       if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
             struct word* insert = malloc(sizeof(struct word));
             insert->word = newWord;
             insert->occurence = 1;
             insert->next = NULL;
-            prev->next = insert;
+
+    
+            prev = NULL;
+            ptr = head;
+            while(ptr != NULL) {
+                if(compareStr(newWord, ptr->word) == 1) {  
+                    if(prev == NULL) {
+                        insert->next = head;
+                        head = insert;
+                        break;
+                    }
+                    else {
+                        prev->next = insert;
+                        insert->next = ptr;
+                        break;
+                    }
+                }
+                prev = ptr;
+                ptr = ptr->next;
+            }
+            if(ptr == NULL)  {
+                prev->next = insert;
+                insert->next = NULL;
+            }
             wordLen = 0;
 
         }
