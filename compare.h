@@ -300,7 +300,7 @@ void* readDirectory(void* arguments) {
 
     while(dequeue(args->dirQueue, &directory) == EXIT_SUCCESS) {
         if (DEBUG == true) 
-            printf("Hello from thread #%d\n", args->id);
+            printf("Hello from dir thread #%d\n", args->id);
         DIR *folder = opendir(directory); // open the current directory
         if (folder == NULL) {
             perror("opendir failed");
@@ -370,138 +370,384 @@ void* readDirectory(void* arguments) {
 
 /** File and WSD Code */
 typedef struct word {
-    char* letters;      // holds the string
-    size_t count;       // number of times this word has been seen
-    double freq;        // freq of this word
+    char* word;
+    double occurence;
+    double frequency;
+    struct word* next;
 } word;
 
 typedef struct wfd_node{
     char* fileName;
-    word* wordArray;            // array holding all the words in the file
-    size_t totalNumOfWords;
-    size_t insertIndex;         // insert index into the array
-    size_t size;
+    word* wordLL;            // LL holding all the words in the file in lexicographic order
 } wfd_node;
 
-// init a wfd_node -- letters MUST BE MALLOC'd -- DO NOT free letters after calling this method
-word* init_word(word* w, char* letters){
-    if(w != NULL){          // if the word is already initialized then return immediately
-        fprintf(stderr, "%s", "This wfd_node has already been initialized!");
-        return w;
-    }
-    w = malloc(sizeof(word));       // malloc space
-    if (w == NULL) {                                                  // If malloc fails then call perror and exit failure
-        perror("Malloc Failed in init_word for Word");
-        return EXIT_FAILURE;
-    }
-    w->letters = letters;
-    w->count = 1;
-    w->freq = 0;
-    return w;
-}
+typedef struct WFD{
+    wfd_node* wfdArray;
+    int insertIndex;
+    int size;
+    pthread_mutex_t lock;      // Mutex lock
+} WFD;
 
-// Free the word's letters
-int destroy_word(word w){
-    free(w.letters);
-    return EXIT_SUCCESS;
-}
-
-// init a wfd_node -- fileName MUST BE MALLOC'd -- DO NOT free filename after calling this method
-wfd_node* init_wfd_node(wfd_node* ptr, char* fileName){
+WFD* init_WFD(WFD* ptr){
     if(ptr!=NULL){       // Already initialized
         if(DEBUG == true){
-            fprintf(stderr, "%s", "This wfd_node has already been initialized!");
+            fprintf(stderr, "%s", "The WFD has already been initialized!");
         }
         return ptr;
     }
-    int minSize = 1;
-    ptr = malloc(sizeof(wfd_node));
+    ptr = malloc(sizeof(WFD));
     if (ptr == NULL) {                                                  // If malloc fails then call perror and exit failure
-        perror("Malloc Failed in init_wfd_node for the wfd_node address");
-        return EXIT_FAILURE;
+        perror("Malloc Failed in init_WFD for the WFD address");
+        return NULL;
     }
-    ptr->fileName = fileName;
-    ptr->wordArray = malloc(minSize*sizeof(word));
-    if (ptr->wordArray == NULL) {                                       // If malloc fails then call perror and exit failure
-        perror("Malloc Failed in init_wfd_node for wordArray");
-        return EXIT_FAILURE;
+    int minSize = 1;
+    ptr->wfdArray = malloc(minSize *sizeof(wfd_node));
+    if (ptr == NULL) {                                                  // If malloc fails then call perror and exit failure
+        perror("Malloc Failed in init_WFD for the WFD address");
+        return NULL;
     }
-    ptr->totalNumOfWords = 0;
     ptr->insertIndex = 0;
     ptr->size = minSize;
+    pthread_mutex_init(&ptr->lock, NULL);
     return ptr;
 }
 
-// resize the wfd_node wordArray
-int resize_wordArray(wfd_node* wfdnode){
-    if(wfdnode == NULL){
-        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
-        return EXIT_FAILURE;
-    }
-    wfdnode->wordArray = realloc(wfdnode->wordArray, wfdnode->size * sizeof(word));
-    if (wfdnode->wordArray == NULL) {                                   // If realloc fails then call perror and exit failure
-        perror("Realloc Failed in resize_wfdArray for Node");
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
-}
-
-// add a word to the wfd_node -- DO NOT free the word* after calling this because it is handled by the destroy_wfd_node method
-int wfd_add(wfd_node* wfdnode, word* w){
-    if(wfdnode == NULL){
-        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
-        return EXIT_FAILURE;
-    }
-    if(wfdnode->insertIndex >= wfdnode->size){
-        wfdnode->size *= 2;
-        if (resize_wordArray(wfdnode) == EXIT_FAILURE)
-            return EXIT_FAILURE;
-    }
-    
-    wfdnode->wordArray[wfdnode->insertIndex++] = *w;                // increment the index and add the word to the word array
-    free(w);
-    return EXIT_SUCCESS;
-}
-
-
-// If you newly malloc'd the 2nd parameter here, then YOU must free it -- if it is the exact same recycled address of an existing element in wfd then DO NOT free it after.
-int wfd_indexOf(wfd_node* wfdnode, char* w){
-    if(wfdnode == NULL){
-        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
-        return -1;
-    }
-    for(int i = 0; i < wfdnode->insertIndex; i++){                  // Loop thru all the words up till insertIndex
-        if(strcmp(wfdnode->wordArray[i].letters, w) == 0){          // if the current word is equal to w, return index
-            return i;
+int resize_wfdArray(WFD* wfd){
+    if(wfd == NULL){
+        if(DEBUG == true){
+            fprintf(stderr, "%s", "The WFD or wfd_node has not been initialized!");
         }
-    }
-    return -1;                                                      // return -1 if not found
-}
-
-// Destroy's a wfd_node -- free everything
-int destroy_wfd_node(wfd_node* wfdnode){
-    if(wfdnode == NULL){
-        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
         return EXIT_FAILURE;
     }
-    for(int i = 0; i < wfdnode->insertIndex; i++){
-        destroy_word(wfdnode->wordArray[i]);
+    pthread_mutex_lock(&wfd->lock);
+    wfd->size *= 2;
+    wfd->wfdArray = realloc(wfd->wfdArray, wfd->size*sizeof(wfd_node));
+    if(wfd->wfdArray == NULL){
+        perror("Realloc Failed in init_WFD for the WFD address");
+        pthread_mutex_unlock(&wfd->lock);
+        return EXIT_FAILURE;
     }
-    free(wfdnode->wordArray);
-    free(wfdnode->fileName);
-    free(wfdnode);
+    pthread_mutex_unlock(&wfd->lock);
     return EXIT_SUCCESS;
 }
 
-// Print all the words in a wfd_node
-void print_wfd_node(wfd_node* wfdnode){
-    if(wfdnode == NULL){
-        fprintf(stderr, "%s", "This wfd_node has not been initialized!");
-        return;
+int add_wfd_node(WFD* wfd, wfd_node* wfdnode){
+    if(wfd == NULL || wfdnode == NULL){
+        if(DEBUG == true){
+            fprintf(stderr, "%s", "The WFD or wfd_node has not been initialized!");
+        }
+        return EXIT_FAILURE;
     }
-    printf("Printing Word Array: ");
-    for(int i = 0; i < wfdnode->insertIndex; i++){
-        printf("%s, ", wfdnode->wordArray[i].letters);
+    pthread_mutex_lock(&wfd->lock);
+    if(wfd->insertIndex >= wfd->size){
+        pthread_mutex_unlock(&wfd->lock);
+        resize_wfdArray(wfd);
+        pthread_mutex_lock(&wfd->lock);
     }
-    printf("Done\n");
+    wfd->wfdArray[wfd->insertIndex++] = *wfdnode;
+    free(wfdnode);
+    pthread_mutex_unlock(&wfd->lock);
+    return EXIT_SUCCESS;
+}
+
+int destroy_wfd(WFD* wfd){
+    if(wfd == NULL){
+        if(DEBUG == true){
+            fprintf(stderr, "%s", "The WFD or wfd_node has not been initialized!");
+        }
+        return EXIT_FAILURE;
+    }
+    pthread_mutex_lock(&wfd->lock);
+    for(int i =0; i< wfd->insertIndex; i++){
+        word* head = wfd->wfdArray[i].wordLL;
+        while(head!=NULL){
+            word* temp = head;
+            head = head->next;
+            free(temp->word);
+            free(temp);
+        }
+        free((wfd->wfdArray[i].fileName));
+    }
+    free((wfd->wfdArray));
+    free(wfd);
+    pthread_mutex_unlock(&wfd->lock);
+    return EXIT_SUCCESS;
+}
+
+int print_wfd(WFD* wfd){
+    if(wfd == NULL){
+        if(DEBUG == true){
+            fprintf(stderr, "%s", "The WFD or wfd_node has not been initialized!");
+        }
+        return EXIT_FAILURE;
+    }
+    pthread_mutex_lock(&wfd->lock);
+    for(int i =0; i< wfd->insertIndex; i++){
+        printf("FILE: %s", wfd->wfdArray[i].fileName);
+        word* head = wfd->wfdArray[i].wordLL;
+        while(head!=NULL){
+            if(DEBUG == true)
+                printf("\tString: %s\tOccurence: %.0f\t Frequency: %f\n", head->word, head->occurence, head->frequency);
+            head = head->next;
+        }
+        printf("\n");
+    }
+    pthread_mutex_unlock(&wfd->lock);
+    return EXIT_SUCCESS;
+}
+
+typedef struct file_args{
+    Queue* fileQueue;
+    WFD* wfd;
+    int id;
+    int exitCode;
+} file_args;
+
+void* readFile(void* arguments){
+    file_args* args = arguments;
+    if (DEBUG == true) 
+            printf("Hello from file thread #%d\n", args->id);
+    int fd;             // keeps tarck of file descriptor
+    int byte;           // keeps track of bytes read
+    int wordLen;        // keeps tracks of each wordss length when reading through file
+    char currChar;      // used to store each invidividual character as we read through the file
+    word* head = NULL;   // the head of a linked list that's used to store each word in the file
+    int allWords = 0;           // counter used to keep track of how many words are in the file overall
+
+    char* filename = NULL;
+    printQueue(args->fileQueue);
+    while(dequeue(args->fileQueue, &filename) == EXIT_SUCCESS){
+        wfd_node* wfdnode = malloc(sizeof(wfd_node));
+        wfdnode->fileName = filename;
+
+        fd = open(filename, O_RDONLY);      // open the file
+
+        int sizeofArray = 100;              // used as the initial size of the array we're gonna store each word into one at a time
+        char* buffer = malloc(sizeofArray * sizeof(char));
+        if(buffer == NULL) {
+            return NULL;
+        }
+
+
+        byte = read(fd, &currChar, 1);          // reading the first charcater in the file
+        wordLen = 0;                            // initialize the length of the upcoming word to 0
+        while(byte > 0) {
+            if(!isspace(currChar)) {            // if byte read is not a whitespace, do the following...
+                if(wordLen == sizeofArray) {    // if the array where we're storing the word becomes full, double the size of it and keep recording
+                    char* temp = realloc(buffer, sizeofArray * 2); 
+                    if(temp == NULL) {
+                        free(buffer);
+                        close(fd);
+                        return NULL;
+                    }
+                    buffer = temp;
+                    sizeofArray *= 2;
+                }
+                if(isalpha(currChar)) buffer[wordLen++] = tolower(currChar);  // if char is a letter, add it the lowercase version to the word array
+                if(currChar == '-') buffer[wordLen++] = currChar;              // if the char is '-', add it to the word array
+                if(isdigit(currChar)) buffer[wordLen++] = currChar; 
+                byte = read(fd, &currChar, 1);
+            }
+            else {
+                if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
+                    char* newWord = malloc(wordLen+1 * sizeof(char));
+                    if(newWord == NULL) {
+                        free(buffer);
+                        close(fd);
+                        return NULL;
+                    }
+                    for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
+                        newWord[i] = buffer[i];
+                    }
+                    newWord[wordLen] = '\0';                            // null terminate the word
+                    allWords++;                                         // increase the overall word tracker by 1
+
+                    struct word* prev = NULL;                           // inserting the new word into the link list with all of the other words found in the file
+                    struct word* ptr = head;
+                    bool readVar = false;
+                    while(ptr != NULL) {
+                        if(strcmp(ptr->word, newWord) == 0) {           // if the new word matches a word already in the linked list, then increment the occurence variable of the word
+                            ptr->occurence++;
+                            readVar = true;
+                            free(newWord);
+                            wordLen = 0;
+                            break;
+                        }
+                        prev = ptr;
+                        ptr = ptr->next;
+                    }
+                    if(prev == NULL && readVar == false) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
+                        struct word* insert = malloc(sizeof(struct word));
+                        insert->word = newWord;
+                        insert->occurence = 1;
+                        insert->next = NULL;
+                        head = insert;
+                        wordLen = 0;
+                    }
+                    else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
+                        struct word* insert = malloc(sizeof(struct word));
+                        insert->word = newWord;
+                        insert->occurence = 1;
+                        insert->next = NULL;
+
+            
+                        prev = NULL;
+                        ptr = head;
+                        while(ptr != NULL) {
+                            int str1size = strlen(newWord);
+                            int str2size = strlen(ptr->word);
+                            int minSize = str1size < str2size ? str1size : str2size;
+                            int add = -1;
+
+                            for(int i = 0; i < minSize; i++) {
+                                if(newWord[i] < ptr->word[i]) {
+                                    add = 1;
+                                    break;
+                                }
+                                if(ptr->word[i] < newWord[i]) {
+                                    add = 0;
+                                    break;
+                                }
+                            }
+                            if((add == -1) && (str1size <= str2size)) add = 1;
+                            if(add == 1) {  
+                                if(prev == NULL) {
+                                    insert->next = head;
+                                    head = insert;
+                                    break;
+                                }
+                                else {
+                                    prev->next = insert;
+                                    insert->next = ptr;
+                                    break;
+                                }
+                            }
+                            prev = ptr;
+                            ptr = ptr->next;
+                        }
+                        if(ptr == NULL)  {
+                            prev->next = insert;
+                            insert->next = NULL;
+                        }
+                        wordLen = 0;
+
+                    }else{
+                        
+                        // free(newWord);
+                        // printf("not here");
+                    }
+                }
+                byte = read(fd, &currChar, 1);
+            }
+        }
+
+        if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
+            char* newWord = malloc(wordLen+1 * sizeof(char));
+            if(newWord == NULL) {
+                free(buffer);
+                close(fd);
+                return NULL;
+            }
+            for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
+                newWord[i] = buffer[i];
+            }
+            newWord[wordLen] = '\0';                            // null terminate the word
+            allWords++;                                         // increase the overall word tracker by 1
+
+            struct word* prev = NULL;                           // inserting the new word into the link list with all of the other words found in the file
+            struct word* ptr = head;
+            bool readVar = false;
+            while(ptr != NULL) {
+                if(strcmp(ptr->word, newWord) == 0) {           // if the new word matches a word already in the linked list, then increment the occurence variable of the word
+                    ptr->occurence++;
+                    readVar = true;
+                    free(newWord);
+                    wordLen = 0;
+                    break;
+                }
+                prev = ptr;
+                ptr = ptr->next;
+            }
+            if(prev == NULL && readVar == false) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
+                struct word* insert = malloc(sizeof(struct word));
+                insert->word = newWord;
+                insert->occurence = 1;
+                insert->next = NULL;
+                head = insert;
+                wordLen = 0;
+            }
+            else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
+                struct word* insert = malloc(sizeof(struct word));
+                insert->word = newWord;
+                insert->occurence = 1;
+                insert->next = NULL;
+
+        
+                prev = NULL;
+                ptr = head;
+                while(ptr != NULL) {
+                    int str1size = strlen(newWord);
+                    int str2size = strlen(ptr->word);
+                    int minSize = str1size < str2size ? str1size : str2size;
+                    int add = -1;
+
+                    for(int i = 0; i < minSize; i++) {
+                        if(newWord[i] < ptr->word[i]) {
+                            add = 1;
+                            break;
+                        }
+                        if(ptr->word[i] < newWord[i]) {
+                            add = 0;
+                            break;
+                        }
+                    }
+                    if((add == -1) && (str1size <= str2size)) add = 1;
+                    if(add == 1) {  
+                        if(prev == NULL) {
+                            insert->next = head;
+                            head = insert;
+                            break;
+                        }
+                        else {
+                            prev->next = insert;
+                            insert->next = ptr;
+                            break;
+                        }
+                    }
+                    prev = ptr;
+                    ptr = ptr->next;
+                }
+                if(ptr == NULL)  {
+                    prev->next = insert;
+                    insert->next = NULL;
+                }
+                wordLen = 0;
+
+            }else{
+                
+                // free(newWord);
+                // printf("not here");
+            }
+        }
+
+        free(buffer);
+        close(fd);
+        
+        word* temp = head;
+        while (temp != NULL)
+        {
+            temp->frequency = (double)(temp->occurence/allWords);
+            // if(DEBUG == true)
+            //     printf("String: %s\tOccurence: %.0f\t Frequency: %f\n", temp->word, temp->occurence, temp->frequency);
+            // struct word* temp = head;
+            // head = head->next;
+            temp = temp->next;
+            // free(temp);
+        }
+        
+        wfdnode->wordLL = head;
+        add_wfd_node(args->wfd, wfdnode);
+        // return head;
+    }
+    return NULL;
 }

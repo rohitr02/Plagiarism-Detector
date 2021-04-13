@@ -70,12 +70,35 @@ int main(int argc, char* argv[]){
         perror("Malloc Failure");
         return EXIT_FAILURE;
     }
-    thread_args* args = malloc(numOfDirThreads * sizeof(thread_args));
-    if(args == NULL){
+    thread_args* threadArgs = malloc(numOfDirThreads * sizeof(thread_args));
+    if(threadArgs == NULL){
         free(fileNameSuffix);
         fileQueue = destroyQueue(fileQueue);
         dirQueue = destroyQueue(dirQueue);
         free(dirThreadIDs);
+        perror("Malloc Failure");
+        return EXIT_FAILURE;
+    }
+
+    // Create variables to store file thread IDs and the arguments to pass to each thread
+    pthread_t* fileThreadIDs = malloc(numOfFileThreads * sizeof(pthread_t));
+    if(fileThreadIDs == NULL){
+        free(fileNameSuffix);
+        free(threadArgs);
+        free(dirThreadIDs);
+        fileQueue = destroyQueue(fileQueue);
+        dirQueue = destroyQueue(dirQueue);
+        perror("Malloc Failure");
+        return EXIT_FAILURE;
+    }
+    file_args* fileArgs = malloc(numOfFileThreads * sizeof(file_args));
+    if(fileArgs == NULL){
+        free(fileNameSuffix);
+        fileQueue = destroyQueue(fileQueue);
+        dirQueue = destroyQueue(dirQueue);
+        free(dirThreadIDs);
+        free(threadArgs);
+        free(fileThreadIDs);
         perror("Malloc Failure");
         return EXIT_FAILURE;
     }
@@ -86,14 +109,29 @@ int main(int argc, char* argv[]){
     pthread_mutex_init(&counterLock, NULL);
     pthread_cond_init(&closeDirQueue, NULL);
 
+    // Variables needed for the file reading threads
+    WFD* wfd = init_WFD(NULL);     // an array of wfd_node pointers that is the WFD
+
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfDirThreads; i++){
-        args[i].dirQueue = dirQueue;
-        args[i].fileQueue = fileQueue;
-        args[i].id = i;
-        args[i].exitCode = EXIT_SUCCESS;
-        args[i].fileSuffix = fileNameSuffix;
-        if(pthread_create(&dirThreadIDs[i], NULL, readDirectory, &args[i]) != 0){
+        threadArgs[i].dirQueue = dirQueue;
+        threadArgs[i].fileQueue = fileQueue;
+        threadArgs[i].id = i;
+        threadArgs[i].exitCode = EXIT_SUCCESS;
+        threadArgs[i].fileSuffix = fileNameSuffix;
+        if(pthread_create(&dirThreadIDs[i], NULL, readDirectory, &threadArgs[i]) != 0){
+            perror("pthread_create failure");
+            // not sure how to handle killing all of the threads here
+        }
+    }
+
+    // Loop through the number of threads to create and make them
+    for(int i = 0; i < numOfFileThreads; i++){
+        fileArgs[i].fileQueue = fileQueue;
+        fileArgs[i].id = i;
+        fileArgs[i].exitCode = EXIT_SUCCESS;
+        fileArgs[i].wfd = wfd;
+        if(pthread_create(&fileThreadIDs[i], NULL, readFile, &fileArgs[i]) != 0){
             perror("pthread_create failure");
             // not sure how to handle killing all of the threads here
         }
@@ -119,12 +157,29 @@ int main(int argc, char* argv[]){
     }
 
 
+    // Manually stopping the files
+    sleep(3);
+    stopQueue(fileQueue);
+
+
+    for(int i = 0; i < numOfFileThreads; i++){
+        if(pthread_join(fileThreadIDs[i], NULL)!=0){ // Change the 2nd parameter here if we want to use the exit status of a specific p_thread
+            perror("pthread_join failure");
+            // not sure how to handle killing all of the threads here
+        }
+    }
+
+    print_wfd(wfd);
+
     // Clean Up -- Free everything
     fileQueue = destroyQueue(fileQueue);
     dirQueue = destroyQueue(dirQueue);
     free(fileNameSuffix);
     free(dirThreadIDs);
-    free(args);
+    free(threadArgs);
+    free(fileThreadIDs);
+    free(fileArgs);
+    destroy_wfd(wfd);
 
     if(errorInProgram == true)
         return EXIT_FAILURE;
