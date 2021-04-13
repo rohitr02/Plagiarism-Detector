@@ -49,6 +49,7 @@ int tokenize(char* filename) {
             }
             if(isalpha(currChar)) buffer[wordLen++] = tolower(currChar);  // if char is a letter, add it the lowercase version to the word array
             if(currChar == '-') buffer[wordLen++] = currChar;              // if the char is '-', add it to the word array
+            if(isdigit(currChar)) buffer[wordLen++] = currChar; 
             byte = read(fd, &currChar, 1);
         }
         else {
