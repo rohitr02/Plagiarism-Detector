@@ -97,6 +97,49 @@ int tokenize(char* filename) {
             byte = read(fd, &currChar, 1);
         }
     }
+    if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
+        char* newWord = malloc(wordLen+1 * sizeof(char));
+        if(newWord == NULL) {
+            free(buffer);
+            close(fd);
+            return EXIT_FAILURE;
+        }
+        for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
+            newWord[i] = buffer[i];
+        }
+        newWord[wordLen] = '\0';                            // null terminate the word
+        allWords++;                                         // increase the overall word tracker by 1
+
+        struct word* prev = NULL;                           // inserting the new word into the link list with all of the other words found in the file
+        struct word* ptr = head;
+        while(ptr != NULL) {
+            if(strcmp(ptr->word, newWord) == 0) {           // if the new word matches a word already in the linked list, then increment the occurence variable of the word
+                ptr->occurence++;
+                wordLen = 0;
+                break;
+            }
+            prev = ptr;
+            ptr = ptr->next;
+        }
+        if(prev == NULL) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
+            struct word* insert = malloc(sizeof(struct word));
+            insert->word = newWord;
+            insert->occurence = 1;
+            insert->next = NULL;
+            head = insert;
+            wordLen = 0;
+        }
+        if(ptr == NULL && prev != NULL) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
+            struct word* insert = malloc(sizeof(struct word));
+            insert->word = newWord;
+            insert->occurence = 1;
+            insert->next = NULL;
+            prev->next = insert;
+            wordLen = 0;
+
+        }
+    }
+
     free(buffer);
     close(fd);
 
@@ -110,4 +153,10 @@ int tokenize(char* filename) {
     }
     
     return EXIT_SUCCESS;
+}
+
+int main(int argc, char* argv[]) {
+    tokenize(argv[1]);
+
+    return EXIT_SUCCESS; 
 }
