@@ -15,6 +15,9 @@
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
 
+pthread_mutex_t fileReadingLock;
+pthread_cond_t file_ready;
+
 // pthread_cond_t closeDirQueue;
 // pthread_cond_t closeFileQueue;
 
@@ -312,10 +315,12 @@ void* readDirectory(void* arguments) {
     thread_args* args = arguments;
     char* directory = NULL; // used to store the name of the dir for readibility
     // printQueue(args->dirQueue);
+    
     while(dequeue(args->dirQueue, &directory) == EXIT_SUCCESS) {
+        // pthread_mutex_lock(&fileReadingLock);
         if (DEBUG == true) {
-            printf("Hello from dir thread #%d \n", args->id);
-            // printQueue(args->dirQueue);
+            printf("Hello from dir thread #%d \t ", args->id);
+            printQueue(args->dirQueue);
         }
         DIR *folder = opendir(directory); // open the current directory
         if (folder == NULL) {
@@ -358,12 +363,12 @@ void* readDirectory(void* arguments) {
                 // Check if its a regular file or directory
                 struct stat data;
                 if (stat(filePath, &data)==0) {
+                    printf("Enqueue Path: %s\n", filePath);
                     if (S_ISREG(data.st_mode) && suffix != NULL && !strcmp(suffix, args->fileSuffix)) { 
                         enqueue(args->fileQueue, filePath); // Need to add an error check here
+                        pthread_cond_broadcast(&file_ready);
                     }else if(S_ISDIR(data.st_mode)) {
                         enqueue(args->dirQueue, filePath);  // Need to add an error check here
-                        // printf("here : ");
-                        // printQueue(args->dirQueue);
                     }
                 }
                 free(filePath);                // frees "dir/filename"
@@ -376,7 +381,9 @@ void* readDirectory(void* arguments) {
         closedir(folder);    // close directory
         // printf("from here: ");
         // printQueue(args->fileQueue);
+        // pthread_mutex_unlock(&fileReadingLock);
     }
+    
     return NULL;
 }
 
@@ -522,12 +529,15 @@ typedef struct file_args{
 void* readFile(void* arguments){
     file_args* args = arguments;
     if (DEBUG == true) {
-        printf("Hello from file thread #%d\t\tHere's the queue\n", args->id);
-        // printQueue(args->fileQueue);
+        printf("Hello from file thread #%d , fileThread active threads = %ld\t", args->id, args->fileQueue->numOfThreadsRunning);
+        printQueue(args->fileQueue);
     }
+    
+    
     char* filename = NULL;
     // printQueue(args->fileQueue);
     while(dequeue(args->fileQueue, &filename) == EXIT_SUCCESS){
+        // pthread_mutex_lock(&fileReadingLock);
             int fd;             // keeps tarck of file descriptor
             int byte;           // keeps track of bytes read
             int wordLen;        // keeps tracks of each wordss length when reading through file
@@ -542,6 +552,7 @@ void* readFile(void* arguments){
         int sizeofArray = 100;              // used as the initial size of the array we're gonna store each word into one at a time
         char* buffer = malloc(sizeofArray * sizeof(char));
         if(buffer == NULL) {
+            // pthread_mutex_unlock(&fileReadingLock);
             return NULL;
         }
 
@@ -555,6 +566,7 @@ void* readFile(void* arguments){
                     if(temp == NULL) {
                         free(buffer);
                         close(fd);
+                        // pthread_mutex_unlock(&fileReadingLock);
                         return NULL;
                     }
                     buffer = temp;
@@ -571,6 +583,7 @@ void* readFile(void* arguments){
                     if(newWord == NULL) {
                         free(buffer);
                         close(fd);
+                        // pthread_mutex_unlock(&fileReadingLock);
                         return NULL;
                     }
                     for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
@@ -661,6 +674,7 @@ void* readFile(void* arguments){
             if(newWord == NULL) {
                 free(buffer);
                 close(fd);
+                // pthread_mutex_unlock(&fileReadingLock);
                 return NULL;
             }
             for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
@@ -763,6 +777,8 @@ void* readFile(void* arguments){
         }
         
         // return head;
+        // pthread_mutex_unlock(&fileReadingLock);
     }
+    
     return NULL;
 }

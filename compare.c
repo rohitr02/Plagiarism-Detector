@@ -17,6 +17,8 @@ int main(int argc, char* argv[]){
     }
     strcpy(fileNameSuffix, ".txt");
 
+    pthread_mutex_init(&fileReadingLock, NULL);
+    pthread_cond_init(&file_ready, NULL);
 
     // Initializing the file and directory queues
     Queue* fileQueue = initQueue(NULL);
@@ -33,6 +35,7 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
     
+    int numOfDirArgs = 0;
 
     // Read the inputs
     for(int i = 1; i < argc; i++){
@@ -40,6 +43,7 @@ int main(int argc, char* argv[]){
             enqueue(fileQueue, argv[i]);
         }else if(isDir(argv[i]) == true){           // Check if it is a directory and enqueue directly to dirQueue
             enqueue(dirQueue, argv[i]);
+            numOfDirArgs++;
         }else if(argv[i][0] == '-'){                // Check if it is a optional argument and update the optional argument if it is. Otherwise return failure if incomplete or invalid option.
             if(setOptionalParameter(argv[i], &numOfDirThreads, &numOfFileThreads, &numOfAnalysisThreads, &fileNameSuffix) == false){
                 free(fileNameSuffix);
@@ -55,23 +59,6 @@ int main(int argc, char* argv[]){
 
     setMaxNumOfThreads(fileQueue, numOfFileThreads);
     setMaxNumOfThreads(dirQueue, numOfDirThreads);
-
-    // char* threeM = malloc(73 * sizeof(char));
-    // strcpy(threeM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/dir1/test3.txt");
-
-    // // char* oneM = malloc(73 * sizeof(char));
-    // // strcpy(oneM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/dir4/test3.txt");
-
-    // // char* twoM = malloc(90 * sizeof(char));
-    // // strcpy(twoM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/Archive/test2dir/pidgin_bib.txt");
-
-    // enqueue(fileQueue, threeM);
-    // // enqueue(fileQueue, oneM);
-    // // enqueue(fileQueue, twoM);
-    // free(threeM);
-    // // free(oneM);
-    // // free(twoM);
-    
     
 
     // if(getSize(dirQueue) == 0){
@@ -141,6 +128,9 @@ int main(int argc, char* argv[]){
         }
     }
 
+    while((numOfDirArgs > 0 && getSize(fileQueue) == 0)){
+        pthread_cond_wait(&file_ready, &fileReadingLock);
+    }
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfFileThreads; i++){
         fileArgs[i].fileQueue = fileQueue;
@@ -179,6 +169,8 @@ int main(int argc, char* argv[]){
     free(fileThreadIDs);
     free(fileArgs);
     destroy_wfd(wfd);
+    pthread_mutex_destroy(&fileReadingLock);
+    pthread_cond_destroy(&file_ready);
 
     if(errorInProgram == true)
         return EXIT_FAILURE;
