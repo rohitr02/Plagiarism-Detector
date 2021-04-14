@@ -124,7 +124,7 @@ int dequeue(Queue* queue, char** item) {
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
     if(queue->size == 0){
         queue->numOfThreadsRunning -= 1;
-        if(queue->numOfThreadsRunning <= 0){
+        if(queue->numOfThreadsRunning < 1){
             // printf("here before broadcast");
             pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
             pthread_mutex_unlock(&queue->lock);
@@ -311,10 +311,12 @@ typedef struct thread_args {
 void* readDirectory(void* arguments) {
     thread_args* args = arguments;
     char* directory = NULL; // used to store the name of the dir for readibility
-
+    // printQueue(args->dirQueue);
     while(dequeue(args->dirQueue, &directory) == EXIT_SUCCESS) {
-        if (DEBUG == true) 
-            printf("Hello from dir thread #%d\n", args->id);
+        if (DEBUG == true) {
+            printf("Hello from dir thread #%d \n", args->id);
+            // printQueue(args->dirQueue);
+        }
         DIR *folder = opendir(directory); // open the current directory
         if (folder == NULL) {
             perror("opendir failed");
@@ -372,6 +374,8 @@ void* readDirectory(void* arguments) {
         }
         free(directory);
         closedir(folder);    // close directory
+        // printf("from here: ");
+        // printQueue(args->fileQueue);
     }
     return NULL;
 }
@@ -388,6 +392,7 @@ typedef struct word {
 typedef struct wfd_node{
     char* fileName;
     word* wordLL;            // LL holding all the words in the file in lexicographic order
+    int sizeofLL;
 } wfd_node;
 
 typedef struct WFD{
@@ -469,9 +474,11 @@ int destroy_wfd(WFD* wfd){
     pthread_mutex_lock(&wfd->lock);
     for(int i =0; i< wfd->insertIndex; i++){
         word* head = wfd->wfdArray[i].wordLL;
+        // int size = wfd->wfdArray[i].sizeofLL; 
         while(head!=NULL){
             word* temp = head;
-            head = head->next;
+            fflush(stdout);
+            head = head->next;  
             free(temp->word);
             free(temp);
         }
@@ -492,7 +499,7 @@ int print_wfd(WFD* wfd){
     }
     pthread_mutex_lock(&wfd->lock);
     for(int i =0; i< wfd->insertIndex; i++){
-        printf("FILE: %s", wfd->wfdArray[i].fileName);
+        printf("FILE: \n%s", wfd->wfdArray[i].fileName);
         word* head = wfd->wfdArray[i].wordLL;
         while(head!=NULL){
             if(DEBUG == true)
@@ -514,20 +521,21 @@ typedef struct file_args{
 
 void* readFile(void* arguments){
     file_args* args = arguments;
-    if (DEBUG == true) 
-            printf("Hello from file thread #%d\n", args->id);
-    int fd;             // keeps tarck of file descriptor
-    int byte;           // keeps track of bytes read
-    int wordLen;        // keeps tracks of each wordss length when reading through file
-    char currChar;      // used to store each invidividual character as we read through the file
-    word* head = NULL;   // the head of a linked list that's used to store each word in the file
-    int allWords = 0;           // counter used to keep track of how many words are in the file overall
-
+    if (DEBUG == true) {
+        printf("Hello from file thread #%d\t\tHere's the queue\n", args->id);
+        // printQueue(args->fileQueue);
+    }
     char* filename = NULL;
-    printQueue(args->fileQueue);
+    // printQueue(args->fileQueue);
     while(dequeue(args->fileQueue, &filename) == EXIT_SUCCESS){
-        wfd_node* wfdnode = malloc(sizeof(wfd_node));
-        wfdnode->fileName = filename;
+            int fd;             // keeps tarck of file descriptor
+            int byte;           // keeps track of bytes read
+            int wordLen;        // keeps tracks of each wordss length when reading through file
+            char currChar;      // used to store each invidividual character as we read through the file
+            word* head = NULL;   // the head of a linked list that's used to store each word in the file
+            int allWords = 0;           // counter used to keep track of how many words are in the file overall
+
+            int sizOfLL = 0;
 
         fd = open(filename, O_RDONLY);      // open the file
 
@@ -591,6 +599,8 @@ void* readFile(void* arguments){
                         insert->occurence = 1;
                         insert->next = NULL;
                         head = insert;
+                        readVar = true;
+                        sizOfLL++;
                         wordLen = 0;
                     }
                     else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
@@ -599,7 +609,7 @@ void* readFile(void* arguments){
                         insert->occurence = 1;
                         insert->next = NULL;
 
-            
+                        sizOfLL++;
                         prev = NULL;
                         ptr = head;
                         while(ptr != NULL) {
@@ -679,6 +689,8 @@ void* readFile(void* arguments){
                 insert->occurence = 1;
                 insert->next = NULL;
                 head = insert;
+                sizOfLL++;
+                readVar = true;
                 wordLen = 0;
             }
             else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
@@ -686,7 +698,7 @@ void* readFile(void* arguments){
                 insert->word = newWord;
                 insert->occurence = 1;
                 insert->next = NULL;
-
+                sizOfLL++;
         
                 prev = NULL;
                 ptr = head;
@@ -740,9 +752,16 @@ void* readFile(void* arguments){
             temp->frequency = (double)(temp->occurence/allWords);
             temp = temp->next;
         }
+
+        if(head != NULL){
+            printf("HERE : %s\n", filename);
+            wfd_node* wfdnode = malloc(sizeof(wfd_node));
+            wfdnode->fileName = filename;
+            wfdnode->wordLL = head;
+            wfdnode->sizeofLL = sizOfLL++;
+            add_wfd_node(args->wfd, wfdnode);
+        }
         
-        wfdnode->wordLL = head;
-        add_wfd_node(args->wfd, wfdnode);
         // return head;
     }
     return NULL;

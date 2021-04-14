@@ -55,14 +55,24 @@ int main(int argc, char* argv[]){
 
     setMaxNumOfThreads(fileQueue, numOfFileThreads);
     setMaxNumOfThreads(dirQueue, numOfDirThreads);
-    
 
-    // Checking if everything is correct
-    if(DEBUG == true){
-        printf("%d %d %d %s\n", numOfDirThreads, numOfFileThreads, numOfAnalysisThreads, fileNameSuffix);
-        printQueue(fileQueue);
-        printQueue(dirQueue);
-    }
+    // char* threeM = malloc(73 * sizeof(char));
+    // strcpy(threeM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/dir1/test3.txt");
+
+    // // char* oneM = malloc(73 * sizeof(char));
+    // // strcpy(oneM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/dir4/test3.txt");
+
+    // // char* twoM = malloc(90 * sizeof(char));
+    // // strcpy(twoM, "/ilab/users/rpr79/Desktop/CS214/CS214-Project2/testcases/Archive/test2dir/pidgin_bib.txt");
+
+    // enqueue(fileQueue, threeM);
+    // // enqueue(fileQueue, oneM);
+    // // enqueue(fileQueue, twoM);
+    // free(threeM);
+    // // free(oneM);
+    // // free(twoM);
+    
+    
 
     // if(getSize(dirQueue) == 0){
     //     printf("No directories\n");
@@ -96,8 +106,8 @@ int main(int argc, char* argv[]){
     pthread_t* fileThreadIDs = malloc(numOfFileThreads * sizeof(pthread_t));
     if(fileThreadIDs == NULL){
         free(fileNameSuffix);
-        free(threadArgs);
-        free(dirThreadIDs);
+        // free(threadArgs);
+        // free(dirThreadIDs);
         fileQueue = destroyQueue(fileQueue);
         dirQueue = destroyQueue(dirQueue);
         perror("Malloc Failure");
@@ -108,8 +118,8 @@ int main(int argc, char* argv[]){
         free(fileNameSuffix);
         fileQueue = destroyQueue(fileQueue);
         dirQueue = destroyQueue(dirQueue);
-        free(dirThreadIDs);
-        free(threadArgs);
+        // free(dirThreadIDs);
+        // free(threadArgs);
         free(fileThreadIDs);
         perror("Malloc Failure");
         return EXIT_FAILURE;
@@ -131,7 +141,7 @@ int main(int argc, char* argv[]){
         }
     }
 
-    // // Loop through the number of threads to create and make them
+    // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfFileThreads; i++){
         fileArgs[i].fileQueue = fileQueue;
         fileArgs[i].id = i;
