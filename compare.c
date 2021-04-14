@@ -61,15 +61,6 @@ int main(int argc, char* argv[]){
     setMaxNumOfThreads(dirQueue, numOfDirThreads);
     
 
-    // if(getSize(dirQueue) == 0){
-    //     printf("No directories\n");
-    //     free(fileNameSuffix);
-    //     fileQueue = destroyQueue(fileQueue);
-    //     dirQueue = destroyQueue(dirQueue);
-    //     return EXIT_SUCCESS;
-    // }
-
-
     // Create variables to store thread IDs and the arguments to pass to each thread
     pthread_t* dirThreadIDs = malloc(numOfDirThreads * sizeof(pthread_t));
     if(dirThreadIDs == NULL){
@@ -93,8 +84,8 @@ int main(int argc, char* argv[]){
     pthread_t* fileThreadIDs = malloc(numOfFileThreads * sizeof(pthread_t));
     if(fileThreadIDs == NULL){
         free(fileNameSuffix);
-        // free(threadArgs);
-        // free(dirThreadIDs);
+        free(threadArgs);
+        free(dirThreadIDs);
         fileQueue = destroyQueue(fileQueue);
         dirQueue = destroyQueue(dirQueue);
         perror("Malloc Failure");
@@ -105,9 +96,35 @@ int main(int argc, char* argv[]){
         free(fileNameSuffix);
         fileQueue = destroyQueue(fileQueue);
         dirQueue = destroyQueue(dirQueue);
-        // free(dirThreadIDs);
-        // free(threadArgs);
+        free(dirThreadIDs);
+        free(threadArgs);
         free(fileThreadIDs);
+        perror("Malloc Failure");
+        return EXIT_FAILURE;
+    }
+
+    pthread_t* analThreadIDs = malloc(numOfAnalysisThreads * sizeof(pthread_t));
+    if(analThreadIDs == NULL){
+        free(fileNameSuffix);
+        free(threadArgs);
+        free(dirThreadIDs);
+        free(fileThreadIDs);
+        free(fileArgs);
+        fileQueue = destroyQueue(fileQueue);
+        dirQueue = destroyQueue(dirQueue);
+        perror("Malloc Failure");
+        return EXIT_FAILURE;
+    }
+    anal_args* analArgs = malloc(numOfAnalysisThreads * sizeof(anal_args));
+    if(analArgs == NULL){
+        free(fileNameSuffix);
+        fileQueue = destroyQueue(fileQueue);
+        dirQueue = destroyQueue(dirQueue);
+        free(dirThreadIDs);
+        free(threadArgs);
+        free(fileThreadIDs);
+        free(fileArgs);
+        free(analThreadIDs);
         perror("Malloc Failure");
         return EXIT_FAILURE;
     }
@@ -161,6 +178,40 @@ int main(int argc, char* argv[]){
 
     print_wfd(wfd);
 
+    int sizeOfWFD = wfd->insertIndex;
+
+    if(sizeOfWFD == 1){
+        fileQueue = destroyFileQueue(fileQueue, dirQueue);
+        dirQueue = destroyQueue(dirQueue);
+        free(fileNameSuffix);
+        free(dirThreadIDs);
+        free(threadArgs);
+        free(fileThreadIDs);
+        free(fileArgs);
+        destroy_wfd(wfd);
+        return EXIT_FAILURE;
+    }
+
+    JSD outputArray[((sizeOfWFD-1) * sizeOfWFD)/2];
+
+    // Figure out how to split the WFD entries or data for each thread inside this for loop
+    for(int i = 0; i < numOfAnalysisThreads; i++){
+        analArgs[i].id = i;
+        analArgs[i].exitCode = EXIT_SUCCESS;
+        analArgs[i].wfd = wfd;
+        if(pthread_create(&analThreadIDs[i], NULL, runAnalysis, &analArgs[i]) != 0){
+            perror("pthread_create failure");
+            // not sure how to handle killing all of the threads here
+        }
+    }
+
+    for(int i = 0; i < numOfAnalysisThreads; i++){
+        if(pthread_join(analThreadIDs[i], NULL)!=0){ // Change the 2nd parameter here if we want to use the exit status of a specific p_thread
+            perror("pthread_join failure");
+            // not sure how to handle killing all of the threads here
+        }
+    }
+
     // Clean Up -- Free everything
     fileQueue = destroyFileQueue(fileQueue, dirQueue);
     dirQueue = destroyQueue(dirQueue);
@@ -170,10 +221,20 @@ int main(int argc, char* argv[]){
     free(fileThreadIDs);
     free(fileArgs);
     destroy_wfd(wfd);
-    // pthread_mutex_destroy(&fileReadingLock);
-    // pthread_cond_destroy(&file_ready);
 
     if(errorInProgram == true)
         return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }
+
+
+// Useless code we might need later
+
+    // No directories are entered
+    // if(getSize(dirQueue) == 0){
+    //     printf("No directories\n");
+    //     free(fileNameSuffix);
+    //     fileQueue = destroyQueue(fileQueue);
+    //     dirQueue = destroyQueue(dirQueue);
+    //     return EXIT_SUCCESS;
+    // }

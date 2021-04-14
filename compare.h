@@ -15,11 +15,6 @@
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
 
-// pthread_mutex_t fileReadingLock;
-// pthread_cond_t file_ready;
-
-// pthread_cond_t closeDirQueue;
-// pthread_cond_t closeFileQueue;
 
 /* Queue Code */
 typedef struct node {
@@ -895,5 +890,25 @@ void* readFile(void* arguments){
         // pthread_mutex_unlock(&fileReadingLock);
     }
     
+    return NULL;
+}
+
+
+
+typedef struct JSD{
+    char* file1;
+    char* file2;
+    int totalWordCount;
+    double jsd;
+} JSD;
+
+typedef struct anal_args{
+    WFD* wfd;
+    int id;
+    int exitCode;
+} anal_args;
+
+void* runAnalysis(void* arguments){
+    anal_args* args = arguments;
     return NULL;
 }
