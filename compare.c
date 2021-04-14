@@ -51,6 +51,10 @@ int main(int argc, char* argv[]){
             fprintf(stderr, "%s %s\n", argv[i], "is an invalid argument.");
         }
     }
+
+
+    setMaxNumOfThreads(fileQueue, numOfFileThreads);
+    setMaxNumOfThreads(dirQueue, numOfDirThreads);
     
 
     // Checking if everything is correct
@@ -59,6 +63,14 @@ int main(int argc, char* argv[]){
         printQueue(fileQueue);
         printQueue(dirQueue);
     }
+
+    // if(getSize(dirQueue) == 0){
+    //     printf("No directories\n");
+    //     free(fileNameSuffix);
+    //     fileQueue = destroyQueue(fileQueue);
+    //     dirQueue = destroyQueue(dirQueue);
+    //     return EXIT_SUCCESS;
+    // }
 
 
     // Create variables to store thread IDs and the arguments to pass to each thread
@@ -103,12 +115,6 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
 
-    // Used to keep track of when to stop/close the directory queue
-    atomic_uint dirThreadCompleteCounter = 0;
-    pthread_mutex_t counterLock;
-    pthread_mutex_init(&counterLock, NULL);
-    pthread_cond_init(&closeDirQueue, NULL);
-
     // Variables needed for the file reading threads
     WFD* wfd = init_WFD(NULL);     // an array of wfd_node pointers that is the WFD
 
@@ -125,7 +131,7 @@ int main(int argc, char* argv[]){
         }
     }
 
-    // Loop through the number of threads to create and make them
+    // // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfFileThreads; i++){
         fileArgs[i].fileQueue = fileQueue;
         fileArgs[i].id = i;
@@ -137,17 +143,6 @@ int main(int argc, char* argv[]){
         }
     }
 
-    // Wait till the number of directory threads completed reaches the number of total directory threads. Then call stopQueue()
-    pthread_mutex_lock(&counterLock);
-    while(dirThreadCompleteCounter < numOfDirThreads){
-        pthread_cond_wait(&closeDirQueue, &counterLock);
-        dirThreadCompleteCounter++;
-    }
-    pthread_mutex_unlock(&counterLock);
-    pthread_mutex_destroy(&counterLock);
-    pthread_cond_destroy(&closeDirQueue);
-    stopQueue(dirQueue);
-
     // Join all of the threads here
     for(int i = 0; i < numOfDirThreads; i++){
         if(pthread_join(dirThreadIDs[i], NULL)!=0){ // Change the 2nd parameter here if we want to use the exit status of a specific p_thread
@@ -155,12 +150,6 @@ int main(int argc, char* argv[]){
             // not sure how to handle killing all of the threads here
         }
     }
-
-
-    // Manually stopping the files
-    sleep(3);
-    stopQueue(fileQueue);
-
 
     for(int i = 0; i < numOfFileThreads; i++){
         if(pthread_join(fileThreadIDs[i], NULL)!=0){ // Change the 2nd parameter here if we want to use the exit status of a specific p_thread

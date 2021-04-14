@@ -15,7 +15,8 @@
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
 
-pthread_cond_t closeDirQueue;
+// pthread_cond_t closeDirQueue;
+// pthread_cond_t closeFileQueue;
 
 /* Queue Code */
 typedef struct node {
@@ -27,9 +28,10 @@ typedef struct Queue {
     node* head;
     node* tail;
     size_t size;
-    bool stopQueue;            // Flag to signal that queue should not recieve any new items
+    // bool stopQueue;            // Flag to signal that queue should not recieve any new items
     pthread_mutex_t lock;      // Mutex lock
     pthread_cond_t read_ready; // Conditional thread flag to use when dequeuing
+    size_t numOfThreadsRunning;
 } Queue;
 
 /** This method must be set equal to the queue pointer variable that's being initialized. Otherwise it will result in a MEMORY LEAK!!! **/
@@ -47,11 +49,24 @@ Queue* initQueue(Queue* queue) {
     }
     queue->head = NULL;
     queue->tail = NULL;
-    queue->stopQueue = false;
+    // queue->stopQueue = false;
     queue->size = 0;
+    queue->numOfThreadsRunning = 1;
     pthread_mutex_init(&queue->lock, NULL);                             // Initialize the mutex lock and the conditional
     pthread_cond_init(&queue->read_ready, NULL);
     return queue;                                                       // Return the mallocd pointer
+}
+
+int setMaxNumOfThreads(Queue* queue, int max){
+    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
+        if (DEBUG == true)
+            fprintf(stderr, "%s\n", "Enqueue Failed: The queue is not initialized");
+        return EXIT_FAILURE;
+    }
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
+    queue->numOfThreadsRunning = max;
+    pthread_mutex_unlock(&queue->lock);
+    return EXIT_SUCCESS;
 }
 
 // data MUST BE a null terminated string
@@ -62,7 +77,8 @@ int enqueue(Queue* queue, char* data) {
         return EXIT_FAILURE;
     }
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
-    if (queue->stopQueue == true) {                                     // If stopQueue has been flagged then unlock the mutex and exit failure
+    if (queue->numOfThreadsRunning == 0) {                                     
+        // printf("%s\n", data);
         pthread_mutex_unlock(&queue->lock);
         return EXIT_FAILURE;
     }
@@ -106,13 +122,24 @@ int dequeue(Queue* queue, char** item) {
         return EXIT_FAILURE;
     }
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
-    while (queue->size == 0 && queue->stopQueue == false) {             // If there are no elements in the queue and the queue has not been stopped yet, then wait until an element is added
-        pthread_cond_wait(&queue->read_ready, &queue->lock);
+    if(queue->size == 0){
+        queue->numOfThreadsRunning -= 1;
+        if(queue->numOfThreadsRunning <= 0){
+            // printf("here before broadcast");
+            pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
+            pthread_mutex_unlock(&queue->lock);
+            return EXIT_FAILURE;
+        }
+        while (queue->size == 0 && queue->numOfThreadsRunning > 0/*queue->stopQueue == false*/) {             // If there are no elements in the queue and the queue has not been stopped yet, then wait until an element is added
+            pthread_cond_wait(&queue->read_ready, &queue->lock);
+        }
+        if (queue->size == 0) {                                             // If the queue size is 0, unlock the lock and return failure
+            pthread_mutex_unlock(&queue->lock);
+            return EXIT_FAILURE;
+        }
+        queue->numOfThreadsRunning += 1;
     }
-    if (queue->size == 0) {                                             // If the queue size is 0, unlock the lock and return failure
-        pthread_mutex_unlock(&queue->lock);
-        return EXIT_FAILURE;
-    }
+    
     node* ptr = queue->head;                                            // Get the head, save the item, replace the head with the next element after it
     *item = ptr->data;
     queue->head = ptr->next;
@@ -126,19 +153,6 @@ int dequeue(Queue* queue, char** item) {
     return EXIT_SUCCESS;
 }
 
-// Used to indicate that no more elements should be added to the queue without destorying the queue (there may still be elements in it that we need to dequeue)
-int stopQueue(Queue* queue) {
-    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
-        if (DEBUG == true)
-            fprintf(stderr, "%s\n", "Stop Queue Failed: The queue is not initialized");
-        return EXIT_FAILURE;
-    }
-    pthread_mutex_lock(&queue->lock);                                   // Lock the mutuex
-    queue->stopQueue = true;                                            // Set the stopQueue flag to true
-    pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
-    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
-    return EXIT_SUCCESS;
-}
 
 /** This method must be set equal to the queue pointer variable that's being destroyed. Otherwise it will result in a MEMORY LEAK and UNDEFINED BEHAVIOR of the variable later on!!! **/
 /* Example: exampleQueue = destroy(exampleQueue) */
@@ -148,7 +162,7 @@ Queue* destroyQueue(Queue* queue) {
             fprintf(stderr, "%s\n", "Destroy Queue Failed: The queue is not initialized");
         return queue;
     }
-    stopQueue(queue);                                                   // Call stop queue
+    // stopQueue(queue);                                                   // Call stop queue
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
     while (queue->head != NULL) {                                       // While there are elements in the queue
         char* item;
@@ -346,6 +360,8 @@ void* readDirectory(void* arguments) {
                         enqueue(args->fileQueue, filePath); // Need to add an error check here
                     }else if(S_ISDIR(data.st_mode)) {
                         enqueue(args->dirQueue, filePath);  // Need to add an error check here
+                        // printf("here : ");
+                        // printQueue(args->dirQueue);
                     }
                 }
                 free(filePath);                // frees "dir/filename"
@@ -356,13 +372,6 @@ void* readDirectory(void* arguments) {
         }
         free(directory);
         closedir(folder);    // close directory
-
-        // Check if the dirQueue is empty, if it is, then signal the main thread to increment the dirThreadCompleteCounter.
-        // Possible Issues: If a thread is complete and it dirThreadCompleteCounter gets incremented, but then another background thread enqueues something, then the next time this thread gets called, it will not go to sleep. 
-        // On the next iteration this thread will once again be marked complete. So I think it is possible for one thread to repeatedly be marked complete even if it doesn't go to sleep on the next iteration.
-        if(getSize(args->dirQueue) == 0){
-            pthread_cond_signal(&closeDirQueue);
-        }
     }
     return NULL;
 }
@@ -487,7 +496,7 @@ int print_wfd(WFD* wfd){
         word* head = wfd->wfdArray[i].wordLL;
         while(head!=NULL){
             if(DEBUG == true)
-                printf("\tString: %s\tOccurence: %.0f\t Frequency: %f\n", head->word, head->occurence, head->frequency);
+                printf("String: %s\tOccurence: %.0f\t Frequency: %f\n", head->word, head->occurence, head->frequency);
             head = head->next;
         }
         printf("\n");
@@ -631,10 +640,6 @@ void* readFile(void* arguments){
                         }
                         wordLen = 0;
 
-                    }else{
-                        
-                        // free(newWord);
-                        // printf("not here");
                     }
                 }
                 byte = read(fd, &currChar, 1);
@@ -723,10 +728,6 @@ void* readFile(void* arguments){
                 }
                 wordLen = 0;
 
-            }else{
-                
-                // free(newWord);
-                // printf("not here");
             }
         }
 
@@ -737,12 +738,7 @@ void* readFile(void* arguments){
         while (temp != NULL)
         {
             temp->frequency = (double)(temp->occurence/allWords);
-            // if(DEBUG == true)
-            //     printf("String: %s\tOccurence: %.0f\t Frequency: %f\n", temp->word, temp->occurence, temp->frequency);
-            // struct word* temp = head;
-            // head = head->next;
             temp = temp->next;
-            // free(temp);
         }
         
         wfdnode->wordLL = head;
