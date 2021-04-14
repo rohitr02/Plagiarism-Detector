@@ -17,17 +17,17 @@ int main(int argc, char* argv[]){
     }
     strcpy(fileNameSuffix, ".txt");
 
-    pthread_mutex_init(&fileReadingLock, NULL);
-    pthread_cond_init(&file_ready, NULL);
+    // pthread_mutex_init(&fileReadingLock, NULL);
+    // pthread_cond_init(&file_ready, NULL);
 
     // Initializing the file and directory queues
-    Queue* fileQueue = initQueue(NULL);
+    Queue* fileQueue = initQueue(NULL, 1);
     if(fileQueue == NULL){                              // Malloc Failure
         free(fileNameSuffix);
         perror("Malloc Failure");
         return EXIT_FAILURE;
     }
-    Queue* dirQueue = initQueue(NULL);
+    Queue* dirQueue = initQueue(NULL,0);
     if(dirQueue == NULL){                               // Malloc Failure
         fileQueue = destroyQueue(fileQueue);
         free(fileNameSuffix);
@@ -128,15 +128,16 @@ int main(int argc, char* argv[]){
         }
     }
 
-    while((numOfDirArgs > 0 && getSize(fileQueue) == 0)){
-        pthread_cond_wait(&file_ready, &fileReadingLock);
-    }
+    // while((numOfDirArgs > 0 && getSize(fileQueue) == 0)){
+    //     pthread_cond_wait(&file_ready, &fileReadingLock);
+    // }
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfFileThreads; i++){
         fileArgs[i].fileQueue = fileQueue;
         fileArgs[i].id = i;
         fileArgs[i].exitCode = EXIT_SUCCESS;
         fileArgs[i].wfd = wfd;
+        fileArgs[i].dirQueue = dirQueue;
         if(pthread_create(&fileThreadIDs[i], NULL, readFile, &fileArgs[i]) != 0){
             perror("pthread_create failure");
             // not sure how to handle killing all of the threads here
@@ -161,7 +162,7 @@ int main(int argc, char* argv[]){
     print_wfd(wfd);
 
     // Clean Up -- Free everything
-    fileQueue = destroyQueue(fileQueue);
+    fileQueue = destroyFileQueue(fileQueue, dirQueue);
     dirQueue = destroyQueue(dirQueue);
     free(fileNameSuffix);
     free(dirThreadIDs);
@@ -169,8 +170,8 @@ int main(int argc, char* argv[]){
     free(fileThreadIDs);
     free(fileArgs);
     destroy_wfd(wfd);
-    pthread_mutex_destroy(&fileReadingLock);
-    pthread_cond_destroy(&file_ready);
+    // pthread_mutex_destroy(&fileReadingLock);
+    // pthread_cond_destroy(&file_ready);
 
     if(errorInProgram == true)
         return EXIT_FAILURE;
