@@ -32,7 +32,6 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
     
-    int numOfDirArgs = 0;
 
     // Read the inputs
     for(int i = 1; i < argc; i++){
@@ -40,7 +39,6 @@ int main(int argc, char* argv[]){
             enqueue(fileQueue, argv[i]);
         }else if(isDir(argv[i]) == true){           // Check if it is a directory and enqueue directly to dirQueue
             enqueue(dirQueue, argv[i]);
-            numOfDirArgs++;
         }else if(argv[i][0] == '-'){                // Check if it is a optional argument and update the optional argument if it is. Otherwise return failure if incomplete or invalid option.
             if(setOptionalParameter(argv[i], &numOfDirThreads, &numOfFileThreads, &numOfAnalysisThreads, &fileNameSuffix) == false){
                 free(fileNameSuffix);
@@ -128,6 +126,19 @@ int main(int argc, char* argv[]){
 
     // Variables needed for the file reading threads
     WFD* wfd = init_WFD(NULL);     // an array of wfd_node pointers that is the WFD
+    if(wfd == NULL){
+        free(fileNameSuffix);
+        fileQueue = destroyQueue(fileQueue);
+        dirQueue = destroyQueue(dirQueue);
+        free(dirThreadIDs);
+        free(threadArgs);
+        free(fileThreadIDs);
+        free(fileArgs);
+        free(analThreadIDs);
+        free(analArgs);
+        perror("Malloc Failure");
+        return EXIT_FAILURE;
+    }
 
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfDirThreads; i++){
@@ -142,9 +153,6 @@ int main(int argc, char* argv[]){
         }
     }
 
-    // while((numOfDirArgs > 0 && getSize(fileQueue) == 0)){
-    //     pthread_cond_wait(&file_ready, &fileReadingLock);
-    // }
     // Loop through the number of threads to create and make them
     for(int i = 0; i < numOfFileThreads; i++){
         fileArgs[i].fileQueue = fileQueue;
@@ -177,7 +185,7 @@ int main(int argc, char* argv[]){
 
     int sizeOfWFD = wfd->insertIndex;
 
-    if(sizeOfWFD == 1){
+    if(sizeOfWFD < 2){
         fileQueue = destroyFileQueue(fileQueue, dirQueue);
         dirQueue = destroyQueue(dirQueue);
         free(fileNameSuffix);
@@ -186,6 +194,8 @@ int main(int argc, char* argv[]){
         free(fileThreadIDs);
         free(fileArgs);
         destroy_wfd(wfd);
+        free(analThreadIDs);
+        free(analArgs);
         return EXIT_FAILURE;
     }
 
@@ -233,6 +243,11 @@ int main(int argc, char* argv[]){
             perror("pthread_join failure");
             // not sure how to handle killing all of the threads here
         }
+    }
+
+    // Handles only 2 file inputted case
+    if((((sizeOfWFD-1) * sizeOfWFD)/2)-1 == 0){
+        printf("%f\t%6s\t%12s\t\n", outputArray[0].value, outputArray[0].file1, outputArray[0].file2);
     }
 
     for(int i = 0; i < (((sizeOfWFD-1) * sizeOfWFD)/2)-1; i++) {
