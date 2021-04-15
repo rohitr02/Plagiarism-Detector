@@ -235,6 +235,22 @@ int main(int argc, char* argv[]){
         }
     }
 
+    for(int i = 0; i < (((sizeOfWFD-1) * sizeOfWFD)/2)-1; i++) {
+        double min = outputArray[i].value;
+        int minIndex = i;
+        for(int j = i+1; j < ((sizeOfWFD-1) * sizeOfWFD)/2; j++) {
+            if(outputArray[j].value < min) {
+                min = outputArray[j].value;
+                minIndex = j;
+            }
+        }
+        struct jsdVals temp = outputArray[i];
+        outputArray[i] = outputArray[minIndex];
+        outputArray[minIndex] = temp;
+        printf("%f\t%s\t%s\t\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
+
+    }
+
     // Clean Up -- Free everything
     fileQueue = destroyFileQueue(fileQueue, dirQueue);
     dirQueue = destroyQueue(dirQueue);
