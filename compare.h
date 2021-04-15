@@ -26,7 +26,6 @@ typedef struct Queue {
     node* head;
     node* tail;
     size_t size;
-    // bool stopQueue;            // Flag to signal that queue should not recieve any new items
     pthread_mutex_t lock;      // Mutex lock
     pthread_cond_t read_ready; // Conditional thread flag to use when dequeuing
     pthread_cond_t close_file;
@@ -49,7 +48,6 @@ Queue* initQueue(Queue* queue, int type) {
     }
     queue->head = NULL;
     queue->tail = NULL;
-    // queue->stopQueue = false;
     queue->size = 0;
     queue->numOfThreadsRunning = 1;
     queue->typeOfQueue = type;
@@ -78,12 +76,8 @@ int enqueue(Queue* queue, char* data) {
             fprintf(stderr, "%s\n", "Enqueue Failed: The queue is not initialized");
         return EXIT_FAILURE;
     }
-    // fflush(stdout);
-    // printf("here: ");
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
-    // printf("%s", data);
     if (queue->numOfThreadsRunning == 0) {                                     
-        // printf("%s\n", data);
         pthread_mutex_unlock(&queue->lock);
         return EXIT_FAILURE;
     }
@@ -213,41 +207,20 @@ int fileDequeue(Queue* queue, char** item, Queue* directoryQueue) {
         return EXIT_FAILURE;
     }
      pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
-    //  printf("check for last time");
-    //  fflush(stdout);
     if(queue->size == 0){
         if(getSize(directoryQueue) == 0 && getNumOfThreadsRunning(directoryQueue) == 0){
-            // printf("check for last time2");
-            //  fflush(stdout);
             pthread_cond_broadcast(&directoryQueue->close_file);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
             pthread_mutex_unlock(&queue->lock);
             return EXIT_FAILURE;
         }
         while(getNumOfThreadsRunning(directoryQueue) > 0 || getSize(directoryQueue) > 0){
-            // printf("\ntrig\n");
             pthread_cond_wait(&directoryQueue->close_file, &queue->lock);
         }
-        // printf("\nfinished waiting ");
-        // if(getSize(directoryQueue) == 0 && getNumOfThreadsRunning(directoryQueue) == 0){
-        //     pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
-        //     pthread_mutex_unlock(&queue->lock);
-        //     return EXIT_FAILURE;
-        // }
-
-        // while (getSize(directoryQueue) == 0 || getNumOfThreadsRunning(directoryQueue) != 0){
-        //     pthread_cond_wait(&queue->read_ready, &queue->lock);
-        // }
-
-        // while(queue->size == 0){
-        //     printf("\ntriggered\n");
-        //     pthread_cond_wait(&queue->read_ready, &queue->lock);
-        // }
+       
         pthread_mutex_unlock(&queue->lock);
         int size = getSize(queue);
         pthread_mutex_lock(&queue->lock);
         if (size == 0) {                                             // If the queue size is 0, unlock the lock and return failure
-        // printf("right before death");
-            fflush(stdout);
             pthread_mutex_unlock(&queue->lock);
             return EXIT_FAILURE;
         }
@@ -255,7 +228,6 @@ int fileDequeue(Queue* queue, char** item, Queue* directoryQueue) {
     
     node* ptr = queue->head;                                            // Get the head, save the item, replace the head with the next element after it
     *item = ptr->data;
-    // printf("no trigger on %s\n", *item);
     queue->head = ptr->next;
     queue->size -= 1;                                                   // Decrease the size of the queue
     if (queue->head == NULL) {                                          // If there are no more elements, set tail to NULL and set size to 0
@@ -280,7 +252,6 @@ Queue* destroyQueue(Queue* queue) {
     while (queue->head != NULL) {                                       // While there are elements in the queue
         char* item;
         pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
-        // if(queue->typeOfQueue == 0)
             dequeue(queue, &item);                                          // Dequeue an element
         pthread_mutex_lock(&queue->lock);                               // Relock the mutex
         if (DEBUG)
@@ -305,7 +276,6 @@ Queue* destroyFileQueue(Queue* queue, Queue* dQ) {
     while (queue->head != NULL) {                                       // While there are elements in the queue
         char* item;
         pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
-        // if(queue->typeOfQueue == 0)
             fileDequeue(queue, &item, dQ);                                          // Dequeue an element
         pthread_mutex_lock(&queue->lock);                               // Relock the mutex
         if (DEBUG)
@@ -423,10 +393,8 @@ typedef struct thread_args {
 void* readDirectory(void* arguments) {
     thread_args* args = arguments;
     char* directory = NULL; // used to store the name of the dir for readibility
-    // printQueue(args->dirQueue);
     
     while(dequeue(args->dirQueue, &directory) == EXIT_SUCCESS) {
-        // pthread_mutex_lock(&fileReadingLock);
         if (DEBUG == true) {
             printf("Hello from dir thread #%d \t ", args->id);
             printQueue(args->dirQueue);
@@ -472,10 +440,8 @@ void* readDirectory(void* arguments) {
                 // Check if its a regular file or directory
                 struct stat data;
                 if (stat(filePath, &data)==0) {
-                    // printf("Enqueue Path: %s\n", filePath);
                     if (S_ISREG(data.st_mode) && suffix != NULL && !strcmp(suffix, args->fileSuffix)) { 
                         enqueue(args->fileQueue, filePath); // Need to add an error check here
-                        // pthread_cond_broadcast(&file_ready);
                     }else if(S_ISDIR(data.st_mode)) {
                         enqueue(args->dirQueue, filePath);  // Need to add an error check here
                     }
@@ -488,9 +454,6 @@ void* readDirectory(void* arguments) {
         }
         free(directory);
         closedir(folder);    // close directory
-        // printf("from here: ");
-        // printQueue(args->fileQueue);
-        // pthread_mutex_unlock(&fileReadingLock);
     }
     
     return NULL;
@@ -590,10 +553,8 @@ int destroy_wfd(WFD* wfd){
     pthread_mutex_lock(&wfd->lock);
     for(int i =0; i< wfd->insertIndex; i++){
         word* head = wfd->wfdArray[i].wordLL;
-        // int size = wfd->wfdArray[i].sizeofLL; 
         while(head!=NULL){
             word* temp = head;
-            fflush(stdout);
             head = head->next;  
             free(temp->word);
             free(temp);
@@ -645,9 +606,7 @@ void* readFile(void* arguments){
     
     
     char* filename = NULL;
-    // printQueue(args->fileQueue);
     while(fileDequeue(args->fileQueue, &filename, args->dirQueue) == EXIT_SUCCESS){
-        // pthread_mutex_lock(&fileReadingLock);
             int fd;             // keeps tarck of file descriptor
             int byte;           // keeps track of bytes read
             int wordLen;        // keeps tracks of each wordss length when reading through file
@@ -662,7 +621,6 @@ void* readFile(void* arguments){
         int sizeofArray = 100;              // used as the initial size of the array we're gonna store each word into one at a time
         char* buffer = malloc(sizeofArray * sizeof(char));
         if(buffer == NULL) {
-            // pthread_mutex_unlock(&fileReadingLock);
             return NULL;
         }
 
@@ -676,7 +634,6 @@ void* readFile(void* arguments){
                     if(temp == NULL) {
                         free(buffer);
                         close(fd);
-                        // pthread_mutex_unlock(&fileReadingLock);
                         return NULL;
                     }
                     buffer = temp;
@@ -693,7 +650,6 @@ void* readFile(void* arguments){
                     if(newWord == NULL) {
                         free(buffer);
                         close(fd);
-                        // pthread_mutex_unlock(&fileReadingLock);
                         return NULL;
                     }
                     for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
@@ -784,7 +740,6 @@ void* readFile(void* arguments){
             if(newWord == NULL) {
                 free(buffer);
                 close(fd);
-                // pthread_mutex_unlock(&fileReadingLock);
                 return NULL;
             }
             for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
@@ -878,16 +833,12 @@ void* readFile(void* arguments){
         }
 
         if(head != NULL){
-            printf("HERE : %s\n", filename);
             wfd_node* wfdnode = malloc(sizeof(wfd_node));
             wfdnode->fileName = filename;
             wfdnode->wordLL = head;
             wfdnode->sizeofLL = sizOfLL++;
             add_wfd_node(args->wfd, wfdnode);
         }
-        
-        // return head;
-        // pthread_mutex_unlock(&fileReadingLock);
     }
     
     return NULL;
@@ -895,20 +846,32 @@ void* readFile(void* arguments){
 
 
 
-typedef struct JSD{
+typedef struct jsdVals {
+    double value;
     char* file1;
     char* file2;
-    int totalWordCount;
-    double jsd;
-} JSD;
+    struct word* file1_LL;
+    struct word* file2_LL;
+} jsdVals;
 
 typedef struct anal_args{
     WFD* wfd;
+    jsdVals* array;
+    int startIndex;
+    int endIndex;
     int id;
     int exitCode;
 } anal_args;
 
 void* runAnalysis(void* arguments){
     anal_args* args = arguments;
+    printf("\nHello from thread #%d\n", args->id);
+    printf("\tThis thread starts at startIndex = %d and ends at endIndex = %d\n", args->startIndex, args->endIndex);
+    if(args->startIndex == -1 || args->endIndex == -1) return NULL;     // This means there are more analysis threads than # of files
+
+    // Loops thru the start index and end index
+    for(int i = args->startIndex; i < args->endIndex; i++){
+        printf("\tThis thread is scanning the files: %s and %s\n", args->array[i].file1, args->array[i].file2);
+    }
     return NULL;
 }

@@ -17,9 +17,6 @@ int main(int argc, char* argv[]){
     }
     strcpy(fileNameSuffix, ".txt");
 
-    // pthread_mutex_init(&fileReadingLock, NULL);
-    // pthread_cond_init(&file_ready, NULL);
-
     // Initializing the file and directory queues
     Queue* fileQueue = initQueue(NULL, 1);
     if(fileQueue == NULL){                              // Malloc Failure
@@ -176,7 +173,7 @@ int main(int argc, char* argv[]){
         }
     }
 
-    print_wfd(wfd);
+    // print_wfd(wfd);
 
     int sizeOfWFD = wfd->insertIndex;
 
@@ -192,13 +189,39 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
 
-    JSD outputArray[((sizeOfWFD-1) * sizeOfWFD)/2];
+    jsdVals outputArray[((sizeOfWFD-1) * sizeOfWFD)/2];
+    int index = 0;
+
+    for(int i = 0; i < wfd->insertIndex-1; i++) {
+        for(int j = i+1; j < wfd->insertIndex; j++) {
+            wfd_node filei = wfd->wfdArray[i];
+            wfd_node filej = wfd->wfdArray[j];
+
+            outputArray[index].value = 0;
+            outputArray[index].file1 = filei.fileName;
+            outputArray[index].file2 = filej.fileName;
+            outputArray[index].file1_LL = filei.wordLL;
+            outputArray[index].file2_LL = filej.wordLL;
+            index++;
+        }
+    }
+    int interval = ((sizeOfWFD-1) * sizeOfWFD)/2 / numOfAnalysisThreads == 0 ? 1 : ((sizeOfWFD-1) * sizeOfWFD)/2 / numOfAnalysisThreads ;
+    index = 0;
 
     // Figure out how to split the WFD entries or data for each thread inside this for loop
     for(int i = 0; i < numOfAnalysisThreads; i++){
         analArgs[i].id = i;
         analArgs[i].exitCode = EXIT_SUCCESS;
         analArgs[i].wfd = wfd;
+        analArgs[i].array = outputArray;
+        if(i >= ((sizeOfWFD-1) * sizeOfWFD)/2){
+            analArgs[i].startIndex = -1;
+            analArgs[i].endIndex = -1;
+        }else{
+            analArgs[i].startIndex = i * interval;
+            analArgs[i].endIndex = i == numOfAnalysisThreads-1 ? ((sizeOfWFD-1) * sizeOfWFD)/2 : analArgs[i].startIndex + interval;
+        }
+
         if(pthread_create(&analThreadIDs[i], NULL, runAnalysis, &analArgs[i]) != 0){
             perror("pthread_create failure");
             // not sure how to handle killing all of the threads here
@@ -221,20 +244,10 @@ int main(int argc, char* argv[]){
     free(fileThreadIDs);
     free(fileArgs);
     destroy_wfd(wfd);
+    free(analThreadIDs);
+    free(analArgs);
 
     if(errorInProgram == true)
         return EXIT_FAILURE;
     return EXIT_SUCCESS;
 }
-
-
-// Useless code we might need later
-
-    // No directories are entered
-    // if(getSize(dirQueue) == 0){
-    //     printf("No directories\n");
-    //     free(fileNameSuffix);
-    //     fileQueue = destroyQueue(fileQueue);
-    //     dirQueue = destroyQueue(dirQueue);
-    //     return EXIT_SUCCESS;
-    // }
