@@ -5,7 +5,7 @@ LFLAGS = -pthread
 all: $(OUTPUT)
 
 compare: compare.c compare.h
-	gcc $(CFLAGS) -o $@ $< $(LFLAGS)
+	gcc $(CFLAGS) -o $@ $< $(LFLAGS) -lm
 
 clean:
 	rm -f *.o $(OUTPUT)

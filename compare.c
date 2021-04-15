@@ -247,7 +247,7 @@ int main(int argc, char* argv[]){
         struct jsdVals temp = outputArray[i];
         outputArray[i] = outputArray[minIndex];
         outputArray[minIndex] = temp;
-        printf("%f\t%s\t%s\t\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
+        printf("%f\t%6s\t%12s\t\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
 
     }
 

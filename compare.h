@@ -13,7 +13,7 @@
 #include <math.h>
 
 #ifndef DEBUG
-#define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
+#define DEBUG false // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
 
 
@@ -866,13 +866,17 @@ typedef struct anal_args{
 
 void* runAnalysis(void* arguments){
     anal_args* args = arguments;
-    printf("\nHello from thread #%d\n", args->id);
-    printf("\tThis thread starts at startIndex = %d and ends at endIndex = %d\n", args->startIndex, args->endIndex);
+    if(DEBUG == true) {
+        printf("\nHello from thread #%d\n", args->id);
+        printf("\tThis thread starts at startIndex = %d and ends at endIndex = %d\n", args->startIndex, args->endIndex);
+    }
     if(args->startIndex == -1 || args->endIndex == -1) return NULL;     // This means there are more analysis threads than # of files
 
     // Loops thru the start index and end index
     for(int i = args->startIndex; i < args->endIndex; i++){
-        printf("\tThis thread is scanning the files: %s and %s\n", args->array[i].file1, args->array[i].file2);
+        if(DEBUG == true) {
+            printf("\tThis thread is scanning the files: %s and %s\n", args->array[i].file1, args->array[i].file2);
+        }
         struct word* ptri = args->array[i].file1_LL;
         struct word* ptrj = args->array[i].file2_LL;
         //printf("%s\n", ptrj->word);
@@ -982,7 +986,8 @@ void* runAnalysis(void* arguments){
         double jsd = sqrt(filei_jsd + filej_jsd);
         //printf("%f\n", jsd);
         args->array[i].value = jsd;
-
     }
+
+
     return NULL;
 }
