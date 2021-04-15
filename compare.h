@@ -15,8 +15,6 @@
 #define DEBUG true // CHANGE THIS TO FALSE BEFORE SUBMITTING
 #endif
 
-// pthread_cond_t closeDirQueue;
-// pthread_cond_t closeFileQueue;
 
 /* Queue Code */
 typedef struct node {
@@ -28,15 +26,16 @@ typedef struct Queue {
     node* head;
     node* tail;
     size_t size;
-    // bool stopQueue;            // Flag to signal that queue should not recieve any new items
     pthread_mutex_t lock;      // Mutex lock
     pthread_cond_t read_ready; // Conditional thread flag to use when dequeuing
+    pthread_cond_t close_file;
     size_t numOfThreadsRunning;
+    int typeOfQueue;
 } Queue;
 
 /** This method must be set equal to the queue pointer variable that's being initialized. Otherwise it will result in a MEMORY LEAK!!! **/
 /* Example: Queue* exampleQueue = init(NULL) */
-Queue* initQueue(Queue* queue) {
+Queue* initQueue(Queue* queue, int type) {
     if (queue != NULL) {                                                // If the queue is already initialized, then immdiately return the queue
         if (DEBUG == true)
             fprintf(stderr, "%s\n", "The queue is already initialized");
@@ -49,11 +48,12 @@ Queue* initQueue(Queue* queue) {
     }
     queue->head = NULL;
     queue->tail = NULL;
-    // queue->stopQueue = false;
     queue->size = 0;
     queue->numOfThreadsRunning = 1;
+    queue->typeOfQueue = type;
     pthread_mutex_init(&queue->lock, NULL);                             // Initialize the mutex lock and the conditional
     pthread_cond_init(&queue->read_ready, NULL);
+    pthread_cond_init(&queue->close_file, NULL);
     return queue;                                                       // Return the mallocd pointer
 }
 
@@ -78,7 +78,6 @@ int enqueue(Queue* queue, char* data) {
     }
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
     if (queue->numOfThreadsRunning == 0) {                                     
-        // printf("%s\n", data);
         pthread_mutex_unlock(&queue->lock);
         return EXIT_FAILURE;
     }
@@ -100,6 +99,7 @@ int enqueue(Queue* queue, char* data) {
     ptr->next = NULL;
 
     queue->size += 1;                                                   // Increase queue size by 1
+    // printf("\t made it to here too!\n");
     if (queue->head == NULL && queue->tail == NULL) {                   // If the queue has no elements, then set the head and tail to ptr.
         queue->head = ptr;
         queue->tail = ptr;
@@ -124,9 +124,10 @@ int dequeue(Queue* queue, char** item) {
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
     if(queue->size == 0){
         queue->numOfThreadsRunning -= 1;
-        if(queue->numOfThreadsRunning <= 0){
+        if(queue->numOfThreadsRunning < 1){
             // printf("here before broadcast");
             pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
+            pthread_cond_signal(&queue->close_file);
             pthread_mutex_unlock(&queue->lock);
             return EXIT_FAILURE;
         }
@@ -154,30 +155,31 @@ int dequeue(Queue* queue, char** item) {
 }
 
 
-/** This method must be set equal to the queue pointer variable that's being destroyed. Otherwise it will result in a MEMORY LEAK and UNDEFINED BEHAVIOR of the variable later on!!! **/
-/* Example: exampleQueue = destroy(exampleQueue) */
-Queue* destroyQueue(Queue* queue) {
+
+int getSize(Queue* queue){
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
-            fprintf(stderr, "%s\n", "Destroy Queue Failed: The queue is not initialized");
-        return queue;
+            fprintf(stderr, "%s\n", "Stop Queue Failed: The queue is not initialized");
+        return -1;
     }
-    // stopQueue(queue);                                                   // Call stop queue
-    pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
-    while (queue->head != NULL) {                                       // While there are elements in the queue
-        char* item;
-        pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
-        dequeue(queue, &item);                                          // Dequeue an element
-        pthread_mutex_lock(&queue->lock);                               // Relock the mutex
-        if (DEBUG)
-            printf("Dequeued: %s\n", item);
-        free(item);
-    }
+    int len = 0;
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutuex
+    len = queue->size;
     pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
-    pthread_mutex_destroy(&queue->lock);                                // Destory the mutex and the conditional
-    pthread_cond_destroy(&queue->read_ready);
-    free(queue);                                                        // Free the queue
-    return NULL;
+    return len;
+}
+
+int getNumOfThreadsRunning(Queue* queue){
+    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
+        if (DEBUG == true)
+            fprintf(stderr, "%s\n", "Stop Queue Failed: The queue is not initialized");
+        return -1;
+    }
+    int num = 0;
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutuex
+    num = queue->numOfThreadsRunning;
+    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
+    return num;
 }
 
 void printQueue(Queue* queue) {
@@ -197,18 +199,98 @@ void printQueue(Queue* queue) {
     pthread_mutex_unlock(&queue->lock);                                 // Unlock the lock
 }
 
-int getSize(Queue* queue){
+// item is a pointer to the location that you need to save the dequeued element to. MUST call free() on the dequeued element after its usage.
+int fileDequeue(Queue* queue, char** item, Queue* directoryQueue) {
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
-            fprintf(stderr, "%s\n", "Stop Queue Failed: The queue is not initialized");
-        return -1;
+            fprintf(stderr, "%s\n", "Dequeue Failed: The queue is not initialized");
+        return EXIT_FAILURE;
     }
-    int len = 0;
-    pthread_mutex_lock(&queue->lock);                                   // Lock the mutuex
-    len = queue->size;
-    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
-    return len;
+     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
+    if(queue->size == 0){
+        if(getSize(directoryQueue) == 0 && getNumOfThreadsRunning(directoryQueue) == 0){
+            pthread_cond_broadcast(&directoryQueue->close_file);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
+            pthread_mutex_unlock(&queue->lock);
+            return EXIT_FAILURE;
+        }
+        while(getNumOfThreadsRunning(directoryQueue) > 0 || getSize(directoryQueue) > 0){
+            pthread_cond_wait(&directoryQueue->close_file, &queue->lock);
+        }
+       
+        pthread_mutex_unlock(&queue->lock);
+        int size = getSize(queue);
+        pthread_mutex_lock(&queue->lock);
+        if (size == 0) {                                             // If the queue size is 0, unlock the lock and return failure
+            pthread_mutex_unlock(&queue->lock);
+            return EXIT_FAILURE;
+        }
+    }
+    
+    node* ptr = queue->head;                                            // Get the head, save the item, replace the head with the next element after it
+    *item = ptr->data;
+    queue->head = ptr->next;
+    queue->size -= 1;                                                   // Decrease the size of the queue
+    if (queue->head == NULL) {                                          // If there are no more elements, set tail to NULL and set size to 0
+        queue->tail = NULL;
+        queue->size = 0;
+    }
+    free(ptr);                                                          // Free the dequeued pointer address and unlock the mutex
+    pthread_mutex_unlock(&queue->lock);
+    return EXIT_SUCCESS;
 }
+
+/** This method must be set equal to the queue pointer variable that's being destroyed. Otherwise it will result in a MEMORY LEAK and UNDEFINED BEHAVIOR of the variable later on!!! **/
+/* Example: exampleQueue = destroy(exampleQueue) */
+Queue* destroyQueue(Queue* queue) {
+    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
+        if (DEBUG == true)
+            fprintf(stderr, "%s\n", "Destroy Queue Failed: The queue is not initialized");
+        return queue;
+    }
+    // stopQueue(queue);                                                   // Call stop queue
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
+    while (queue->head != NULL) {                                       // While there are elements in the queue
+        char* item;
+        pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
+            dequeue(queue, &item);                                          // Dequeue an element
+        pthread_mutex_lock(&queue->lock);                               // Relock the mutex
+        if (DEBUG)
+            printf("Dequeued: %s\n", item);
+        free(item);
+    }
+    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
+    pthread_mutex_destroy(&queue->lock);                                // Destory the mutex and the conditional
+    pthread_cond_destroy(&queue->read_ready);
+    pthread_cond_destroy(&queue->close_file);
+    free(queue);                                                        // Free the queue
+    return NULL;
+}
+
+Queue* destroyFileQueue(Queue* queue, Queue* dQ) {
+    if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
+        if (DEBUG == true)
+            fprintf(stderr, "%s\n", "Destroy Queue Failed: The queue is not initialized");
+        return queue;
+    }
+    pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
+    while (queue->head != NULL) {                                       // While there are elements in the queue
+        char* item;
+        pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
+            fileDequeue(queue, &item, dQ);                                          // Dequeue an element
+        pthread_mutex_lock(&queue->lock);                               // Relock the mutex
+        if (DEBUG)
+            printf("Dequeued: %s\n", item);
+        free(item);
+    }
+    pthread_mutex_unlock(&queue->lock);                                 // Unlock the mutex
+    pthread_mutex_destroy(&queue->lock);                                // Destory the mutex and the conditional
+    pthread_cond_destroy(&queue->read_ready);
+    pthread_cond_destroy(&queue->close_file);
+    free(queue);                                                        // Free the queue
+    return NULL;
+}
+
+
 /* End of Queue Code */
 
 
@@ -311,10 +393,12 @@ typedef struct thread_args {
 void* readDirectory(void* arguments) {
     thread_args* args = arguments;
     char* directory = NULL; // used to store the name of the dir for readibility
-
+    
     while(dequeue(args->dirQueue, &directory) == EXIT_SUCCESS) {
-        if (DEBUG == true) 
-            printf("Hello from dir thread #%d\n", args->id);
+        if (DEBUG == true) {
+            printf("Hello from dir thread #%d \t ", args->id);
+            printQueue(args->dirQueue);
+        }
         DIR *folder = opendir(directory); // open the current directory
         if (folder == NULL) {
             perror("opendir failed");
@@ -360,8 +444,6 @@ void* readDirectory(void* arguments) {
                         enqueue(args->fileQueue, filePath); // Need to add an error check here
                     }else if(S_ISDIR(data.st_mode)) {
                         enqueue(args->dirQueue, filePath);  // Need to add an error check here
-                        // printf("here : ");
-                        // printQueue(args->dirQueue);
                     }
                 }
                 free(filePath);                // frees "dir/filename"
@@ -373,6 +455,7 @@ void* readDirectory(void* arguments) {
         free(directory);
         closedir(folder);    // close directory
     }
+    
     return NULL;
 }
 
@@ -388,6 +471,7 @@ typedef struct word {
 typedef struct wfd_node{
     char* fileName;
     word* wordLL;            // LL holding all the words in the file in lexicographic order
+    int sizeofLL;
 } wfd_node;
 
 typedef struct WFD{
@@ -471,7 +555,7 @@ int destroy_wfd(WFD* wfd){
         word* head = wfd->wfdArray[i].wordLL;
         while(head!=NULL){
             word* temp = head;
-            head = head->next;
+            head = head->next;  
             free(temp->word);
             free(temp);
         }
@@ -492,7 +576,7 @@ int print_wfd(WFD* wfd){
     }
     pthread_mutex_lock(&wfd->lock);
     for(int i =0; i< wfd->insertIndex; i++){
-        printf("FILE: %s", wfd->wfdArray[i].fileName);
+        printf("FILE: \n%s", wfd->wfdArray[i].fileName);
         word* head = wfd->wfdArray[i].wordLL;
         while(head!=NULL){
             if(DEBUG == true)
@@ -510,24 +594,27 @@ typedef struct file_args{
     WFD* wfd;
     int id;
     int exitCode;
+    Queue* dirQueue;
 } file_args;
 
 void* readFile(void* arguments){
     file_args* args = arguments;
-    if (DEBUG == true) 
-            printf("Hello from file thread #%d\n", args->id);
-    int fd;             // keeps tarck of file descriptor
-    int byte;           // keeps track of bytes read
-    int wordLen;        // keeps tracks of each wordss length when reading through file
-    char currChar;      // used to store each invidividual character as we read through the file
-    word* head = NULL;   // the head of a linked list that's used to store each word in the file
-    int allWords = 0;           // counter used to keep track of how many words are in the file overall
-
+    if (DEBUG == true) {
+        printf("Hello from file thread #%d , fileThread active threads = %ld\t", args->id, args->fileQueue->numOfThreadsRunning);
+        printQueue(args->fileQueue);
+    }
+    
+    
     char* filename = NULL;
-    printQueue(args->fileQueue);
-    while(dequeue(args->fileQueue, &filename) == EXIT_SUCCESS){
-        wfd_node* wfdnode = malloc(sizeof(wfd_node));
-        wfdnode->fileName = filename;
+    while(fileDequeue(args->fileQueue, &filename, args->dirQueue) == EXIT_SUCCESS){
+            int fd;             // keeps tarck of file descriptor
+            int byte;           // keeps track of bytes read
+            int wordLen;        // keeps tracks of each wordss length when reading through file
+            char currChar;      // used to store each invidividual character as we read through the file
+            word* head = NULL;   // the head of a linked list that's used to store each word in the file
+            int allWords = 0;           // counter used to keep track of how many words are in the file overall
+
+            int sizOfLL = 0;
 
         fd = open(filename, O_RDONLY);      // open the file
 
@@ -591,6 +678,8 @@ void* readFile(void* arguments){
                         insert->occurence = 1;
                         insert->next = NULL;
                         head = insert;
+                        readVar = true;
+                        sizOfLL++;
                         wordLen = 0;
                     }
                     else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
@@ -599,7 +688,7 @@ void* readFile(void* arguments){
                         insert->occurence = 1;
                         insert->next = NULL;
 
-            
+                        sizOfLL++;
                         prev = NULL;
                         ptr = head;
                         while(ptr != NULL) {
@@ -679,6 +768,8 @@ void* readFile(void* arguments){
                 insert->occurence = 1;
                 insert->next = NULL;
                 head = insert;
+                sizOfLL++;
+                readVar = true;
                 wordLen = 0;
             }
             else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
@@ -686,7 +777,7 @@ void* readFile(void* arguments){
                 insert->word = newWord;
                 insert->occurence = 1;
                 insert->next = NULL;
-
+                sizOfLL++;
         
                 prev = NULL;
                 ptr = head;
@@ -740,10 +831,47 @@ void* readFile(void* arguments){
             temp->frequency = (double)(temp->occurence/allWords);
             temp = temp->next;
         }
-        
-        wfdnode->wordLL = head;
-        add_wfd_node(args->wfd, wfdnode);
-        // return head;
+
+        if(head != NULL){
+            wfd_node* wfdnode = malloc(sizeof(wfd_node));
+            wfdnode->fileName = filename;
+            wfdnode->wordLL = head;
+            wfdnode->sizeofLL = sizOfLL++;
+            add_wfd_node(args->wfd, wfdnode);
+        }
+    }
+    
+    return NULL;
+}
+
+
+
+typedef struct jsdVals {
+    double value;
+    char* file1;
+    char* file2;
+    struct word* file1_LL;
+    struct word* file2_LL;
+} jsdVals;
+
+typedef struct anal_args{
+    WFD* wfd;
+    jsdVals* array;
+    int startIndex;
+    int endIndex;
+    int id;
+    int exitCode;
+} anal_args;
+
+void* runAnalysis(void* arguments){
+    anal_args* args = arguments;
+    printf("\nHello from thread #%d\n", args->id);
+    printf("\tThis thread starts at startIndex = %d and ends at endIndex = %d\n", args->startIndex, args->endIndex);
+    if(args->startIndex == -1 || args->endIndex == -1) return NULL;     // This means there are more analysis threads than # of files
+
+    // Loops thru the start index and end index
+    for(int i = args->startIndex; i < args->endIndex; i++){
+        printf("\tThis thread is scanning the files: %s and %s\n", args->array[i].file1, args->array[i].file2);
     }
     return NULL;
 }
