@@ -269,7 +269,7 @@ int main(int argc, char* argv[]){
         struct jsdVals temp = outputArray[i];
         outputArray[i] = outputArray[maxIndex];
         outputArray[maxIndex] = temp;
-        printf("%f\t%s\t\t%s\t%d\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2, max);
+        printf("%f\t%s\t\t%s\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
 
     }
 
