@@ -198,10 +198,16 @@ int main(int argc, char* argv[]){
             wfd_node filej = wfd->wfdArray[j];
 
             outputArray[index].value = 0;
+
             outputArray[index].file1 = filei.fileName;
-            outputArray[index].file2 = filej.fileName;
+            outputArray[index].totalWords_file1 = filei.totalWordsCount;
             outputArray[index].file1_LL = filei.wordLL;
+
+
+            outputArray[index].file2 = filej.fileName;
+            outputArray[index].totalWords_file2 = filej.totalWordsCount;
             outputArray[index].file2_LL = filej.wordLL;
+
             index++;
         }
     }
@@ -235,19 +241,20 @@ int main(int argc, char* argv[]){
         }
     }
 
-    for(int i = 0; i < (((sizeOfWFD-1) * sizeOfWFD)/2)-1; i++) {
-        double min = outputArray[i].value;
-        int minIndex = i;
+    for(int i = 0; i < (((sizeOfWFD-1) * sizeOfWFD)/2); i++) {
+        int max = outputArray[i].totalWords_file1 + outputArray[i].totalWords_file2;
+        int maxIndex = i;
         for(int j = i+1; j < ((sizeOfWFD-1) * sizeOfWFD)/2; j++) {
-            if(outputArray[j].value < min) {
-                min = outputArray[j].value;
-                minIndex = j;
+            int currTotal = outputArray[j].totalWords_file1 + outputArray[j].totalWords_file2;
+            if(currTotal > max) {
+                max = currTotal;
+                maxIndex = j;
             }
         }
         struct jsdVals temp = outputArray[i];
-        outputArray[i] = outputArray[minIndex];
-        outputArray[minIndex] = temp;
-        printf("%f\t%6s\t%12s\t\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
+        outputArray[i] = outputArray[maxIndex];
+        outputArray[maxIndex] = temp;
+        printf("%f\t%s\t\t%s\t%10d\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
 
     }
 

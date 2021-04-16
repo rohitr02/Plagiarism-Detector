@@ -474,6 +474,7 @@ typedef struct wfd_node{
     char* fileName;
     word* wordLL;            // LL holding all the words in the file in lexicographic order
     int sizeofLL;
+    int totalWordsCount;
 } wfd_node;
 
 typedef struct WFD{
@@ -839,6 +840,7 @@ void* readFile(void* arguments){
             wfdnode->fileName = filename;
             wfdnode->wordLL = head;
             wfdnode->sizeofLL = sizOfLL++;
+            wfdnode->totalWordsCount = allWords;
             add_wfd_node(args->wfd, wfdnode);
         }
     }
@@ -851,6 +853,8 @@ typedef struct jsdVals {
     double value;
     char* file1;
     char* file2;
+    int totalWords_file1;
+    int totalWords_file2; 
     struct word* file1_LL;
     struct word* file2_LL;
 } jsdVals;
