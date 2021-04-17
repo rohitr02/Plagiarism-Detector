@@ -13,11 +13,11 @@
 #include <math.h>
 
 #ifndef DEBUG
-#define DEBUG false // CHANGE THIS TO FALSE BEFORE SUBMITTING
+#define DEBUG false
 #endif
 
 
-/* Queue Code */
+/** Queue Code **/
 typedef struct node {
     char* data;
     struct node* next;
@@ -58,6 +58,7 @@ Queue* initQueue(Queue* queue, int type) {
     return queue;                                                       // Return the mallocd pointer
 }
 
+// Sets the max number of threads assigned to work with this particular queueu
 int setMaxNumOfThreads(Queue* queue, int max){
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -70,7 +71,7 @@ int setMaxNumOfThreads(Queue* queue, int max){
     return EXIT_SUCCESS;
 }
 
-// data MUST BE a null terminated string
+// Enqueues into the queue. data MUST BE a null terminated string
 int enqueue(Queue* queue, char* data) {
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -100,7 +101,6 @@ int enqueue(Queue* queue, char* data) {
     ptr->next = NULL;
 
     queue->size += 1;                                                   // Increase queue size by 1
-    // printf("\t made it to here too!\n");
     if (queue->head == NULL && queue->tail == NULL) {                   // If the queue has no elements, then set the head and tail to ptr.
         queue->head = ptr;
         queue->tail = ptr;
@@ -126,7 +126,6 @@ int dequeue(Queue* queue, char** item) {
     if(queue->size == 0){
         queue->numOfThreadsRunning -= 1;
         if(queue->numOfThreadsRunning < 1){
-            // printf("here before broadcast");
             pthread_cond_broadcast(&queue->read_ready);                         // Broadcast that conditional read_ready is true (elements can now be dequeued)
             pthread_cond_signal(&queue->close_file);
             pthread_mutex_unlock(&queue->lock);
@@ -155,8 +154,7 @@ int dequeue(Queue* queue, char** item) {
     return EXIT_SUCCESS;
 }
 
-
-
+// Gets the size of a queue
 int getSize(Queue* queue){
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -170,6 +168,7 @@ int getSize(Queue* queue){
     return len;
 }
 
+// Gets the number of active threads currently operating on the queue. 
 int getNumOfThreadsRunning(Queue* queue){
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -183,6 +182,7 @@ int getNumOfThreadsRunning(Queue* queue){
     return num;
 }
 
+// Prints the queue
 void printQueue(Queue* queue) {
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -200,7 +200,7 @@ void printQueue(Queue* queue) {
     pthread_mutex_unlock(&queue->lock);                                 // Unlock the lock
 }
 
-// item is a pointer to the location that you need to save the dequeued element to. MUST call free() on the dequeued element after its usage.
+// Dequeue built specifically for the fileQueue. item is a pointer to the location that you need to save the dequeued element to. MUST call free() on the dequeued element after its usage.
 int fileDequeue(Queue* queue, char** item, Queue* directoryQueue) {
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -248,14 +248,13 @@ Queue* destroyQueue(Queue* queue) {
             fprintf(stderr, "%s\n", "Destroy Queue Failed: The queue is not initialized");
         return queue;
     }
-    // stopQueue(queue);                                                   // Call stop queue
     pthread_mutex_lock(&queue->lock);                                   // Lock the mutex
     while (queue->head != NULL) {                                       // While there are elements in the queue
         char* item;
         pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
             dequeue(queue, &item);                                          // Dequeue an element
         pthread_mutex_lock(&queue->lock);                               // Relock the mutex
-        if (DEBUG)
+        if (DEBUG == true)
             printf("Dequeued: %s\n", item);
         free(item);
     }
@@ -267,6 +266,8 @@ Queue* destroyQueue(Queue* queue) {
     return NULL;
 }
 
+/** This method must be set equal to the queue pointer variable that's being destroyed. Otherwise it will result in a MEMORY LEAK and UNDEFINED BEHAVIOR of the variable later on!!! **/
+/* Example: exampleQueue = destroy(exampleQueue) */
 Queue* destroyFileQueue(Queue* queue, Queue* dQ) {
     if (queue == NULL) {                                                // If the queue is not initialized, then immediately return failure
         if (DEBUG == true)
@@ -279,7 +280,7 @@ Queue* destroyFileQueue(Queue* queue, Queue* dQ) {
         pthread_mutex_unlock(&queue->lock); // This seems kinda sketchy // Unlock the mutex before calling dequeue
             fileDequeue(queue, &item, dQ);                                          // Dequeue an element
         pthread_mutex_lock(&queue->lock);                               // Relock the mutex
-        if (DEBUG)
+        if (DEBUG == true)
             printf("Dequeued: %s\n", item);
         free(item);
     }
@@ -291,12 +292,12 @@ Queue* destroyFileQueue(Queue* queue, Queue* dQ) {
     return NULL;
 }
 
-
 /* End of Queue Code */
 
 
-/* Directory Reading and File Queue Writing Methods */
 
+
+/** Basic File/Directory Reading Methods **/
 // Checks if input string is a directory
 int isDir(char* pathname) {
     struct stat data;
@@ -381,7 +382,10 @@ int setOptionalParameter(char* string, int* numOfDirThreadsPtr, int* numOfFileTh
     }
 }
 
-/* Structure to hold the arguments passed into the thread */
+
+
+
+/** Directory Threading Code **/
 typedef struct thread_args {
     Queue* dirQueue;
     Queue* fileQueue;
@@ -403,7 +407,6 @@ void* readDirectory(void* arguments) {
         DIR *folder = opendir(directory); // open the current directory
         if (folder == NULL) {
             perror("opendir failed");
-            // not sure how to handle this error here
             continue;
         }
         struct dirent *currentFile;
@@ -421,9 +424,8 @@ void* readDirectory(void* arguments) {
                 if (filePath == NULL) {
                     perror("Malloc Failure");
                     free(filePath);
-                    // closedir(folder); --this was orig uncommented
-                    // not sure how to handle this error here
-                    continue;
+                    // closedir(folder);
+                    exit(EXIT_FAILURE);
                 }
 
 
@@ -461,7 +463,9 @@ void* readDirectory(void* arguments) {
 }
 
 
-/** File and WSD Code */
+
+
+/** WFD Code */
 typedef struct word {
     char* word;
     double occurence;
@@ -592,6 +596,9 @@ int print_wfd(WFD* wfd){
     return EXIT_SUCCESS;
 }
 
+
+
+/** File Threading Code **/
 typedef struct file_args{
     Queue* fileQueue;
     WFD* wfd;
@@ -624,7 +631,8 @@ void* readFile(void* arguments){
         int sizeofArray = 100;              // used as the initial size of the array we're gonna store each word into one at a time
         char* buffer = malloc(sizeofArray * sizeof(char));
         if(buffer == NULL) {
-            return NULL;
+            perror("Malloc Failure in File Thread");
+            exit(EXIT_FAILURE);
         }
 
 
@@ -635,9 +643,10 @@ void* readFile(void* arguments){
                 if(wordLen == sizeofArray) {    // if the array where we're storing the word becomes full, double the size of it and keep recording
                     char* temp = realloc(buffer, sizeofArray * 2); 
                     if(temp == NULL) {
+                        perror("Realloc Failure in File Thread");
                         free(buffer);
                         close(fd);
-                        return NULL;
+                        exit(EXIT_FAILURE);
                     }
                     buffer = temp;
                     sizeofArray *= 2;
@@ -651,9 +660,10 @@ void* readFile(void* arguments){
                 if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
                     char* newWord = malloc(wordLen+1 * sizeof(char));
                     if(newWord == NULL) {
+                        perror("Malloc Failure in File Thread");
                         free(buffer);
                         close(fd);
-                        return NULL;
+                        exit(EXIT_FAILURE);
                     }
                     for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
                         newWord[i] = buffer[i];
@@ -677,6 +687,10 @@ void* readFile(void* arguments){
                     }
                     if(prev == NULL && readVar == false) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
                         struct word* insert = malloc(sizeof(struct word));
+                        if(insert == NULL){
+                            perror("Malloc Failure in File Thread");
+                            exit(EXIT_FAILURE);
+                        }
                         insert->word = newWord;
                         insert->occurence = 1;
                         insert->next = NULL;
@@ -687,6 +701,10 @@ void* readFile(void* arguments){
                     }
                     else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
                         struct word* insert = malloc(sizeof(struct word));
+                        if(insert == NULL){
+                            perror("Malloc Failure in File Thread");
+                            exit(EXIT_FAILURE);
+                        }
                         insert->word = newWord;
                         insert->occurence = 1;
                         insert->next = NULL;
@@ -741,9 +759,10 @@ void* readFile(void* arguments){
         if(wordLen > 0) {                                               // if a white space is encountered and we have stuff in the word array, then that indicates the end of that word
             char* newWord = malloc(wordLen+1 * sizeof(char));
             if(newWord == NULL) {
+                perror("Malloc Failure in File Thread");
                 free(buffer);
                 close(fd);
-                return NULL;
+                exit(EXIT_FAILURE);
             }
             for(int i = 0; i < wordLen; i++) {                  // copy word from buffer to newWord 
                 newWord[i] = buffer[i];
@@ -767,6 +786,10 @@ void* readFile(void* arguments){
             }
             if(prev == NULL && readVar == false) {                                  // if it's the first word, initialize the head of the link list to point to the word struct that holds the new word
                 struct word* insert = malloc(sizeof(struct word));
+                if(insert == NULL){
+                    perror("Malloc Failure in File Thread");
+                    exit(EXIT_FAILURE);
+                }
                 insert->word = newWord;
                 insert->occurence = 1;
                 insert->next = NULL;
@@ -777,6 +800,10 @@ void* readFile(void* arguments){
             }
             else if(ptr == NULL && prev != NULL && readVar == false) {                     // if we reach the end of the linked list and did not encounter the word, then it is a new word to the list, add it at the end of the linked list
                 struct word* insert = malloc(sizeof(struct word));
+                if(insert == NULL){
+                    perror("Malloc Failure in File Thread");
+                    exit(EXIT_FAILURE);
+                }
                 insert->word = newWord;
                 insert->occurence = 1;
                 insert->next = NULL;
@@ -837,6 +864,10 @@ void* readFile(void* arguments){
 
         if(head != NULL){
             wfd_node* wfdnode = malloc(sizeof(wfd_node));
+            if(wfdnode == NULL){
+                perror("Malloc Failure creating wfd_node");
+                exit(EXIT_FAILURE);
+            }
             wfdnode->fileName = filename;
             wfdnode->wordLL = head;
             wfdnode->sizeofLL = sizOfLL++;
@@ -849,6 +880,9 @@ void* readFile(void* arguments){
 }
 
 
+
+
+/** JSD and Analysis Threads Code **/
 typedef struct jsdVals {
     double value;
     char* file1;
@@ -883,18 +917,14 @@ void* runAnalysis(void* arguments){
         }
         struct word* ptri = args->array[i].file1_LL;
         struct word* ptrj = args->array[i].file2_LL;
-        //printf("%s\n", ptrj->word);
         while((ptri != NULL) || (ptrj != NULL)) {
             if(ptri == NULL) {
                 ptrj->average = ptrj->frequency * 0.5;
-                //printf("file2: %s\n", ptrj->word);
-                //printf("%f\n", ptrj->average);
                 ptrj = ptrj->next;
                 continue;
             }
             if(ptrj == NULL) {
                 ptri->average = ptri->frequency * 0.5;
-                //printf("file1: %s\n", ptri->word);
                 ptri = ptri->next;
                 continue;
             }
@@ -913,15 +943,12 @@ void* runAnalysis(void* arguments){
             char firstChar_i = currWord_filei[0];
             char firstChar_j = currWord_filej[0];
             if(firstChar_i < firstChar_j) {
-                //printf("file1: %s\n", ptri->word);
                 ptri->average = ptri->frequency * 0.5;;
-                //printf("%f\n", ptri->average);
                 ptri = ptri->next;
                 continue;
             }
 
             if(firstChar_j < firstChar_i) {
-                //printf("file2: %s\n", ptrj->word);
                 ptrj->average = ptrj->frequency * 0.5;;
                 ptrj = ptrj->next;
                 continue;
@@ -965,33 +992,24 @@ void* runAnalysis(void* arguments){
         double filei_KLD = 0;
         ptri = args->array[i].file1_LL;
         while(ptri != NULL) {
-            //printf("wordi: %s\tfrequencyi: %f\tavaeragei: %f\tlog2i: %f\n",ptri->word, ptri->frequency,ptri->average, log_2i);
             double x = (ptri->frequency/ptri->average);
             filei_KLD = filei_KLD + (ptri->frequency * log2(x));
-            //printf("KLDi: %f\n", filei_KLD);
             ptri = ptri->next;
         }
-        //printf("KLD1: %f\n",filei_KLD);
-        //putchar('\n');
 
         double filej_KLD = 0;
         ptrj = args->array[i].file2_LL;
         while(ptrj != NULL) {
-            //printf("wordj: %s\tfrequencyj: %f\tavaeragej: %f\tlog2j: %f\n",ptrj->word, ptrj->frequency,ptrj->average, log_2j);
             double x = (ptrj->frequency/ptrj->average);
             filej_KLD = filej_KLD + (ptrj->frequency * log2(x));
-            //printf("KLDj: %f\n", filej_KLD);
             ptrj = ptrj->next;
         }
-        //printf("KLD2: %f\n",filej_KLD);
 
         double filei_jsd = filei_KLD * 0.5;
         double filej_jsd = filej_KLD * 0.5;
         double jsd = sqrt(filei_jsd + filej_jsd);
-        //printf("%f\n", jsd);
         args->array[i].value = jsd;
     }
-
 
     return NULL;
 }
