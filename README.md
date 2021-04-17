@@ -28,4 +28,5 @@ Sorting:
 After going through each element in the array that stored the jsd values, we then used insertion sort to sort the structs in descending order according to the sum of total words file in each file that the struct contained. We were able to directly test this within the larger program itself since it was a short addition to the overall program. Once again we tested it on smaller testcases where we already knew the expected order and were able to confirm that the sort worked.
 
 General Debugging: We made sure to test the program using UBSan, AddressSanitizer, and Valgrind
+
 Note: This program must be run on the Ilabs machines.
