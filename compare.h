@@ -595,9 +595,8 @@ int destroy_wfd(WFD* wfd){
         free((wfd->wfdArray[i].fileName));
     }
     free((wfd->wfdArray));
-    pthread_mutex_t* l = &wfd->lock;
+    pthread_mutex_unlock(&wfd->lock);
     free(wfd);
-    pthread_mutex_unlock(l);
     return EXIT_SUCCESS;
 }
 
