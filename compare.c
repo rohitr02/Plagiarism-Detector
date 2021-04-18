@@ -198,6 +198,8 @@ int main(int argc, char* argv[]){
         return EXIT_FAILURE;
     }
 
+    // pthread_mutex_init( analyLock );
+
     // Create array to hold JSD values -- no need to make it dynamically allocated since we know the size beforehand
     jsdVals outputArray[((sizeOfWFD-1) * sizeOfWFD)/2];
     int index = 0;
@@ -210,15 +212,52 @@ int main(int argc, char* argv[]){
 
             outputArray[index].value = 0;
 
+            word* copy1 = copyWordLL(filei.wordLL);
+            word* copy2 = copyWordLL(filej.wordLL);
+
+            // word* copy1 = malloc(filei.sizeofLL * sizeof(word));
+            // word* copy1Ptr = copy1;
+            // word* ptr = filei.wordLL;
+            // while(ptr!=NULL){
+                // copy1Ptr->average = ptr->average;
+                // copy1Ptr->frequency = ptr->frequency;
+            //     if(ptr->next == NULL)
+            //         copy1->next = NULL;
+            //     else
+            //         *copy1->next = *ptr->next;
+                // copy1Ptr->occurence = ptr->occurence;
+                // copy1Ptr->word = ptr->word;
+                // copy1Ptr = copy1Ptr->next;
+            //     ptr = ptr->next;
+            // }
+
+            // word* copy2 = malloc(filej.sizeofLL * sizeof(word));
+            // word* copy2Ptr = copy2;
+            // ptr = filej.wordLL;
+            // while(ptr!=NULL){
+            //     copy2Ptr->average = ptr->average;
+            //     copy2Ptr->frequency = ptr->frequency;
+            //     if(ptr->next == NULL)
+            //         copy2->next = NULL;
+            //     else
+            //         *copy2->next = *ptr->next;
+            //     copy2Ptr->occurence = ptr->occurence;
+            //     copy2Ptr->word = ptr->word;
+            //     copy2Ptr = copy2Ptr->next;
+            //     ptr = ptr->next;
+            // }
+
             outputArray[index].file1 = filei.fileName;
             outputArray[index].totalWords_file1 = filei.totalWordsCount;
-            outputArray[index].file1_LL = filei.wordLL;
+            // outputArray[index].file1_LL = filei.wordLL;
+            outputArray[index].file1_LL = copy1;
 
 
             outputArray[index].file2 = filej.fileName;
             outputArray[index].totalWords_file2 = filej.totalWordsCount;
-            outputArray[index].file2_LL = filej.wordLL;
-
+            // outputArray[index].file2_LL = filej.wordLL;
+            outputArray[index].file2_LL = copy2;
+            
             index++;
         }
     }
@@ -231,7 +270,6 @@ int main(int argc, char* argv[]){
     for(int i = 0; i < numOfAnalysisThreads; i++){
         analArgs[i].id = i;
         analArgs[i].exitCode = EXIT_SUCCESS;
-        analArgs[i].wfd = wfd;
         analArgs[i].array = outputArray;
         if(i >= ((sizeOfWFD-1) * sizeOfWFD)/2){
             analArgs[i].startIndex = -1;
@@ -266,12 +304,25 @@ int main(int argc, char* argv[]){
                 maxIndex = j;
             }
         }
-        struct jsdVals temp = outputArray[i];
+        jsdVals temp = outputArray[i];
         outputArray[i] = outputArray[maxIndex];
         outputArray[maxIndex] = temp;
         printf("%f\t%s\t\t%s\n", outputArray[i].value, outputArray[i].file1, outputArray[i].file2);
     }
-
+    for(int i = 0; i < (((sizeOfWFD-1) * sizeOfWFD)/2); i++) {
+        word* ptr = outputArray[i].file1_LL;
+        while(ptr!=NULL){
+            word* temp = ptr->next;
+            free(ptr);
+            ptr = temp;
+        }
+        ptr = outputArray[i].file2_LL;
+        while(ptr!=NULL){
+            word* temp = ptr->next;
+            free(ptr);
+            ptr = temp;
+        }
+    }
     // Clean Up -- Free everything and exit
     fileQueue = destroyFileQueue(fileQueue, dirQueue);
     dirQueue = destroyQueue(dirQueue);
@@ -283,6 +334,9 @@ int main(int argc, char* argv[]){
     destroy_wfd(wfd);
     free(analThreadIDs);
     free(analArgs);
+    
+
+    // pthread_mutex_destroy( analyLock );
 
     if(errorInProgram == true)
         return EXIT_FAILURE;

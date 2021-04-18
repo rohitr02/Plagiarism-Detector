@@ -488,6 +488,32 @@ typedef struct WFD{
     pthread_mutex_t lock;      // Mutex lock
 } WFD;
 
+
+word* copyWordLL(word* wordLL) {
+  word* prev = NULL ;
+  word* head = NULL ;
+
+while (wordLL != NULL){
+    word* newWord = malloc(sizeof(word)) ;
+    if(newWord == NULL){
+        perror("Malloc Failure inside copyWordLL");
+        exit(EXIT_FAILURE);
+    }
+    if (head == NULL)
+        head = newWord ;
+
+    memcpy(newWord, wordLL, sizeof(word)) ;
+    newWord->next = NULL ;
+
+    if (prev != NULL)
+        prev->next = newWord ;
+
+    prev = newWord ;
+    wordLL = wordLL->next;
+    }
+  return head ;
+}
+
 WFD* init_WFD(WFD* ptr){
     if(ptr!=NULL){       // Already initialized
         if(DEBUG == true){
@@ -569,8 +595,9 @@ int destroy_wfd(WFD* wfd){
         free((wfd->wfdArray[i].fileName));
     }
     free((wfd->wfdArray));
+    pthread_mutex_t* l = &wfd->lock;
     free(wfd);
-    pthread_mutex_unlock(&wfd->lock);
+    pthread_mutex_unlock(l);
     return EXIT_SUCCESS;
 }
 
@@ -693,6 +720,7 @@ void* readFile(void* arguments){
                         }
                         insert->word = newWord;
                         insert->occurence = 1;
+                        insert->average = 0;
                         insert->next = NULL;
                         head = insert;
                         readVar = true;
@@ -707,6 +735,7 @@ void* readFile(void* arguments){
                         }
                         insert->word = newWord;
                         insert->occurence = 1;
+                        insert->average = 0;
                         insert->next = NULL;
 
                         sizOfLL++;
@@ -793,6 +822,7 @@ void* readFile(void* arguments){
                 insert->word = newWord;
                 insert->occurence = 1;
                 insert->next = NULL;
+                insert->average = 0;
                 head = insert;
                 sizOfLL++;
                 readVar = true;
@@ -806,6 +836,7 @@ void* readFile(void* arguments){
                 }
                 insert->word = newWord;
                 insert->occurence = 1;
+                insert->average = 0;
                 insert->next = NULL;
                 sizOfLL++;
         
@@ -894,13 +925,14 @@ typedef struct jsdVals {
 } jsdVals;
 
 typedef struct anal_args{
-    WFD* wfd;
     jsdVals* array;
     int startIndex;
     int endIndex;
     int id;
     int exitCode;
 } anal_args;
+
+// pthread_mutex_t analyLock;
 
 void* runAnalysis(void* arguments){
     anal_args* args = arguments;
@@ -943,13 +975,13 @@ void* runAnalysis(void* arguments){
             char firstChar_i = currWord_filei[0];
             char firstChar_j = currWord_filej[0];
             if(firstChar_i < firstChar_j) {
-                ptri->average = ptri->frequency * 0.5;;
+                ptri->average = ptri->frequency * 0.5;
                 ptri = ptri->next;
                 continue;
             }
 
             if(firstChar_j < firstChar_i) {
-                ptrj->average = ptrj->frequency * 0.5;;
+                ptrj->average = ptrj->frequency * 0.5;
                 ptrj = ptrj->next;
                 continue;
             }
